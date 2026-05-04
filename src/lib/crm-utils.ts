@@ -1,4 +1,4 @@
-import type { Lead, LeadStatus, Quality, WebsiteOpportunity } from "./types";
+import type { Lead, LeadSource, LeadStatus, Quality, WebsiteOpportunity } from "./types";
 
 export const STATUSES: LeadStatus[] = [
   "Not Called",
@@ -114,4 +114,88 @@ export function relativeFollowUp(iso?: string) {
   if (days === 0) return { label: "Today", tone: "today" as const };
   if (days <= 3) return { label: `In ${days}d`, tone: "soon" as const };
   return { label: `In ${days}d`, tone: "later" as const };
+}
+
+export interface SourceLink {
+  source: LeadSource;
+  label: string;
+  url: string;
+  domain: string;
+}
+
+export function sourceLinks(lead: Lead): SourceLink[] {
+  const q = encodeURIComponent(`${lead.business} ${lead.city} ${lead.state}`);
+  const qOnly = encodeURIComponent(lead.business);
+  const cityState = encodeURIComponent(`${lead.city}, ${lead.state}`);
+
+  const map: Record<LeadSource, { label: string; url: string; domain: string }> = {
+    "Facebook": {
+      label: "Facebook Page",
+      url: `https://www.facebook.com/search/pages/?q=${qOnly}`,
+      domain: "facebook.com",
+    },
+    "Yelp": {
+      label: "Yelp Listing",
+      url: `https://www.yelp.com/search?find_desc=${qOnly}&find_loc=${cityState}`,
+      domain: "yelp.com",
+    },
+    "Google Business": {
+      label: "Google Business Profile",
+      url: `https://www.google.com/maps/search/?api=1&query=${q}`,
+      domain: "google.com/maps",
+    },
+    "Instagram": {
+      label: "Instagram",
+      url: `https://www.google.com/search?q=site%3Ainstagram.com+${qOnly}`,
+      domain: "instagram.com",
+    },
+    "Houzz": {
+      label: "Houzz Profile",
+      url: `https://www.houzz.com/professionals/query/${qOnly}`,
+      domain: "houzz.com",
+    },
+    "MapQuest": {
+      label: "MapQuest Listing",
+      url: `https://www.mapquest.com/search/results?query=${q}`,
+      domain: "mapquest.com",
+    },
+    "Angie's List": {
+      label: "Angi (Angie's List)",
+      url: `https://www.angi.com/companylist/search.htm?searchTerm=${qOnly}&zip=${encodeURIComponent(lead.city)}`,
+      domain: "angi.com",
+    },
+    "Website": {
+      label: "Their Website",
+      url: `https://www.google.com/search?q=${q}+official+site`,
+      domain: "google search",
+    },
+    "Directory": {
+      label: "Directory Listings",
+      url: `https://www.google.com/search?q=${q}+upholstery`,
+      domain: "google search",
+    },
+    "Other": {
+      label: "Web Mentions",
+      url: `https://www.google.com/search?q=${q}`,
+      domain: "google search",
+    },
+  };
+
+  const seen = new Set<LeadSource>();
+  const links: SourceLink[] = [];
+  for (const s of lead.sources) {
+    if (seen.has(s)) continue;
+    seen.add(s);
+    links.push({ source: s, ...map[s] });
+  }
+  // Always include a general Google search as a safety net
+  if (!links.some((l) => l.domain === "google search")) {
+    links.push({
+      source: "Other",
+      label: "Google Search",
+      url: `https://www.google.com/search?q=${q}`,
+      domain: "google search",
+    });
+  }
+  return links;
 }
