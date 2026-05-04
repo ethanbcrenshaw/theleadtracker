@@ -1,0 +1,117 @@
+import type { Lead, LeadStatus, Quality, WebsiteOpportunity } from "./types";
+
+export const STATUSES: LeadStatus[] = [
+  "Not Called",
+  "Called",
+  "Voicemail",
+  "Callback Scheduled",
+  "Zoom Booked",
+  "Sold",
+  "Not Interested",
+];
+
+export const QUALITIES: Quality[] = ["High", "Medium", "Low"];
+
+export const OPPORTUNITIES: WebsiteOpportunity[] = [
+  "No Dedicated Website",
+  "Facebook Only",
+  "Yelp/Directory Only",
+  "Outdated Website",
+  "Has Website",
+  "Social-Heavy",
+];
+
+export const SOURCES = [
+  "Yelp",
+  "Facebook",
+  "Google Business",
+  "Angie's List",
+  "MapQuest",
+  "Website",
+  "Instagram",
+  "Houzz",
+  "Directory",
+  "Other",
+] as const;
+
+export function qualityClasses(q: Quality) {
+  return q === "High"
+    ? "bg-sage/25 text-sage-foreground border-sage/40"
+    : q === "Medium"
+      ? "bg-gold/25 text-gold-foreground border-gold/40"
+      : "bg-clay/15 text-clay border-clay/30";
+}
+
+export function statusClasses(s: LeadStatus) {
+  switch (s) {
+    case "Not Called":
+      return "bg-navy/10 text-navy border-navy/20";
+    case "Called":
+      return "bg-muted text-muted-foreground border-border";
+    case "Voicemail":
+      return "bg-[oklch(0.85_0.04_300)] text-[oklch(0.3_0.05_300)] border-[oklch(0.7_0.04_300)]";
+    case "Callback Scheduled":
+      return "bg-gold/30 text-gold-foreground border-gold/40";
+    case "Zoom Booked":
+      return "bg-sage/30 text-sage-foreground border-sage/40";
+    case "Sold":
+      return "bg-[oklch(0.55_0.1_150)] text-white border-[oklch(0.45_0.1_150)]";
+    case "Not Interested":
+      return "bg-clay/15 text-clay border-clay/30";
+  }
+}
+
+export function pitchAngle(lead: Lead): string {
+  const op = lead.websiteOpportunity;
+  if (op === "No Dedicated Website")
+    return "This business has no dedicated website — only directory or map listings. A simple professional site would make them look more trustworthy and capture customers searching on Google.";
+  if (op === "Facebook Only")
+    return "This business relies entirely on Facebook. A simple website would make them findable in Google searches and let customers request quotes without needing a Facebook account.";
+  if (op === "Yelp/Directory Only")
+    return "Their online presence is scattered across directories like Yelp and MapQuest. A central website would unify their brand, showcase work, and convert more leads.";
+  if (op === "Outdated Website")
+    return "Their current site looks outdated and likely loses trust. A modern redesign would feel professional, load fast on phones, and help close more jobs.";
+  if (op === "Social-Heavy")
+    return "They have strong social momentum but no website hub. A clean site would convert that traffic into quote requests and rank them in local search.";
+  return "They already have a website — lower priority unless they want a refresh.";
+}
+
+export function exportCSV(leads: Lead[]) {
+  const headers = [
+    "Priority","Business","City","State","Phone","Online Presence","Website Opportunity",
+    "Quality","Status","Sources","Last Contacted","Next Follow-Up","Notes","Tags","Owner",
+  ];
+  const rows = leads.map((l) => [
+    l.priority, l.business, l.city, l.state, l.phone, l.onlinePresence,
+    l.websiteOpportunity, l.quality, l.status, l.sources.join("; "),
+    l.lastContacted ?? "", l.nextFollowUp ?? "", l.notes.replace(/\n/g, " "),
+    l.tags.join("; "), l.ownerNote ?? "",
+  ]);
+  const escape = (v: unknown) => {
+    const s = String(v ?? "");
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const csv = [headers, ...rows].map((r) => r.map(escape).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `leads-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function formatDate(iso?: string) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+export function relativeFollowUp(iso?: string) {
+  if (!iso) return null;
+  const days = Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000);
+  if (days < 0) return { label: `${Math.abs(days)}d overdue`, tone: "overdue" as const };
+  if (days === 0) return { label: "Today", tone: "today" as const };
+  if (days <= 3) return { label: `In ${days}d`, tone: "soon" as const };
+  return { label: `In ${days}d`, tone: "later" as const };
+}
