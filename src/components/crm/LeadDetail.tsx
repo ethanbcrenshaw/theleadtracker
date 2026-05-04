@@ -1,10 +1,10 @@
-import { X, Phone, MapPin, Calendar, Sparkles, Plus } from "lucide-react";
+import { X, Phone, MapPin, Calendar, Sparkles, Plus, ExternalLink } from "lucide-react";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Lead, LeadStatus } from "@/lib/types";
 import { useLeads } from "@/lib/store";
 import { QualityBadge, StatusBadge } from "./Badges";
-import { formatDate, pitchAngle } from "@/lib/crm-utils";
+import { formatDate, pitchAngle, sourceLinks } from "@/lib/crm-utils";
 
 interface Props {
   lead: Lead | null;
@@ -85,6 +85,32 @@ export function LeadDetail({ lead, onClose }: Props) {
                   {lead.sources.map((s) => (
                     <span key={s} className="px-2 py-0.5 rounded-full bg-secondary border border-border text-[11px]">{s}</span>
                   ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-2">
+                  <ExternalLink className="h-3.5 w-3.5" /> Find Them Online
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {sourceLinks(lead).map((link) => (
+                    <a
+                      key={link.source + link.url}
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group flex items-center justify-between gap-2 rounded-xl bg-card border border-border px-3 py-2.5 hover:border-navy/40 hover:bg-tan/10 transition-colors"
+                    >
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-foreground truncate">{link.label}</div>
+                        <div className="text-[11px] text-muted-foreground truncate">{link.domain}</div>
+                      </div>
+                      <ExternalLink className="h-3.5 w-3.5 text-muted-foreground group-hover:text-navy shrink-0" />
+                    </a>
+                  ))}
+                </div>
+                <div className="text-[11px] text-muted-foreground italic mt-2">
+                  Links search by business name + city — opens the most likely profile.
                 </div>
               </div>
 
