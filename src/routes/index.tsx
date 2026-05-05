@@ -12,6 +12,7 @@ import { FollowUpView } from "@/components/crm/FollowUpView";
 import { OpportunitiesView } from "@/components/crm/OpportunitiesView";
 import { AIGenerateModal } from "@/components/crm/AIGenerateModal";
 import { BulkBar } from "@/components/crm/BulkBar";
+import { CallAssistant } from "@/components/crm/CallAssistant";
 import type { Lead } from "@/lib/types";
 
 export const Route = createFileRoute("/")({
@@ -44,6 +45,7 @@ function Dashboard() {
   const [view, setView] = useState<View>("table");
   const [active, setActive] = useState<Lead | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
+  const [callLead, setCallLead] = useState<Lead | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState<FilterState>({
     city: "All", quality: "All", status: "All", opportunity: "All", source: "All",
@@ -168,6 +170,7 @@ function Dashboard() {
             toggleAll={toggleAll}
             onView={setActive}
             onStatusChange={(id, s) => setStatus(id, s)}
+            onCall={setCallLead}
           />
         )}
         {view === "kanban" && <KanbanView leads={filtered} onView={setActive} />}
@@ -179,7 +182,8 @@ function Dashboard() {
         </footer>
       </main>
 
-      <LeadDetail lead={active} onClose={() => setActive(null)} />
+      <LeadDetail lead={active} onClose={() => setActive(null)} onStartCall={setCallLead} />
+      <CallAssistant lead={callLead} onClose={() => setCallLead(null)} />
       <AIGenerateModal open={aiOpen} onClose={() => setAiOpen(false)} />
       <BulkBar
         count={selected.size}

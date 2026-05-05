@@ -1,4 +1,4 @@
-import { Eye, Pencil, ChevronDown } from "lucide-react";
+import { Eye, Pencil, ChevronDown, Mic } from "lucide-react";
 import type { Lead, LeadStatus } from "@/lib/types";
 import { QualityBadge, StatusBadge } from "./Badges";
 import { formatDate, relativeFollowUp, STATUSES } from "@/lib/crm-utils";
@@ -11,6 +11,7 @@ interface Props {
   toggleAll: () => void;
   onView: (lead: Lead) => void;
   onStatusChange: (id: string, s: LeadStatus) => void;
+  onCall?: (lead: Lead) => void;
 }
 
 function FollowUpPill({ iso }: { iso?: string }) {
@@ -24,7 +25,7 @@ function FollowUpPill({ iso }: { iso?: string }) {
   return <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${tone}`}>{r.label}</span>;
 }
 
-export function LeadTable({ leads, selected, toggleSelect, toggleAll, onView, onStatusChange }: Props) {
+export function LeadTable({ leads, selected, toggleSelect, toggleAll, onView, onStatusChange, onCall }: Props) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const allChecked = leads.length > 0 && leads.every((l) => selected.has(l.id));
 
@@ -118,6 +119,12 @@ export function LeadTable({ leads, selected, toggleSelect, toggleAll, onView, on
                 <td className="py-3 px-2"><FollowUpPill iso={l.nextFollowUp} /></td>
                 <td className="py-3 px-2 pr-4">
                   <div className="flex items-center gap-1">
+                    {onCall && (
+                      <button onClick={() => onCall(l)}
+                        className="p-1.5 rounded-lg hover:bg-maroon/10 text-maroon" title="Start Call Assistant">
+                        <Mic className="h-4 w-4" />
+                      </button>
+                    )}
                     <button onClick={() => onView(l)} className="p-1.5 rounded-lg hover:bg-secondary" title="View">
                       <Eye className="h-4 w-4 text-muted-foreground" />
                     </button>
