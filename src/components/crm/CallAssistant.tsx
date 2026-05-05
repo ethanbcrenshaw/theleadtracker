@@ -619,7 +619,7 @@ export function CallAssistant({ lead, onClose }: Props) {
                   Cancel
                 </button>
                 <button onClick={processTranscript}
-                  disabled={!transcript.trim()}
+                  disabled={!transcript.trim() && elapsed < 8 && signal !== "tone" && signal !== "no-speech"}
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-navy text-navy-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50">
                   <Sparkles className="h-4 w-4" /> Summarize with AI
                 </button>
