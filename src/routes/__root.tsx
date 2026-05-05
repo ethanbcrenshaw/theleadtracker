@@ -1,6 +1,7 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 
 import appCss from "../styles.css?url";
+import { SmoothScroll } from "@/components/SmoothScroll";
 
 function NotFoundComponent() {
   return (
@@ -69,5 +70,10 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function RootComponent() {
-  return <Outlet />;
+  return (
+    <>
+      <SmoothScroll />
+      <Outlet />
+    </>
+  );
 }
