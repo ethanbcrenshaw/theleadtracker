@@ -39,7 +39,7 @@ export const Route = createFileRoute("/api/summarize-call")({
     handlers: {
       POST: async ({ request }) => {
         try {
-          const { transcript, lead } = (await request.json()) as {
+          const { transcript, lead, callSignals } = (await request.json()) as {
             transcript?: string;
             lead?: { business?: string; city?: string; state?: string; websiteOpportunity?: string };
             callSignals?: { elapsedSeconds?: number; detectedDialTone?: boolean; detectedNoSpeech?: boolean };
