@@ -9,7 +9,7 @@ const SCHEMA = {
     summary: { type: "string", description: "2-4 sentence summary of the call" },
     outcome: {
       type: "string",
-      description: "Short outcome label, e.g. 'Answered — interested', 'Voicemail', 'Not interested', 'Callback requested'",
+      description: "Short outcome label, e.g. 'Answered — interested', 'Voicemail', 'Not interested', 'Callback requested', 'Dial tone / no answer', 'No speech detected'",
     },
     answered: { type: "boolean" },
     interested: { type: "boolean" },
@@ -42,6 +42,7 @@ export const Route = createFileRoute("/api/summarize-call")({
           const { transcript, lead } = (await request.json()) as {
             transcript?: string;
             lead?: { business?: string; city?: string; state?: string; websiteOpportunity?: string };
+            callSignals?: { elapsedSeconds?: number; detectedDialTone?: boolean; detectedNoSpeech?: boolean };
           };
           if (!transcript || transcript.trim().length < 10) {
             return Response.json({ error: "Transcript too short" }, { status: 400 });
@@ -58,16 +59,16 @@ export const Route = createFileRoute("/api/summarize-call")({
             method: "POST",
             headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
             body: JSON.stringify({
-              model: "google/gemini-2.5-flash",
+              model: "google/gemini-3-flash-preview",
               messages: [
                 {
                   role: "system",
                   content:
                     "You analyze sales call transcripts for a web design agency selling websites to local businesses. Extract structured CRM updates. Today is " +
                     today +
-                    ". Use ISO dates. Be conservative — if unsure, set booleans to false and dates to null.",
+                    ". Use ISO dates. Be conservative — if unsure, set booleans to false and dates to null. If the call contains no lead speech, only dial tone, ringing, silence, or no meaningful conversation, set answered=false, interested=false, suggestedStatus='Callback Scheduled', zoomBooked=false, and recommend calling again later. Only use Voicemail when the transcript clearly says a voicemail was left or reached.",
                 },
-                { role: "user", content: `${ctx}\n\nTranscript:\n${transcript}` },
+                { role: "user", content: `${ctx}\n\nCall signals:\n${JSON.stringify(callSignals ?? {})}\n\nTranscript:\n${transcript}` },
               ],
               tools: [
                 {
