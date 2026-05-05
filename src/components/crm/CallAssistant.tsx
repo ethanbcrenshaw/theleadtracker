@@ -92,6 +92,8 @@ export function CallAssistant({ lead, onClose }: Props) {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const finalTranscriptRef = useRef("");
   const shouldRestartRecognitionRef = useRef(false);
+  const pausedRef = useRef(false);
+  const recordingRef = useRef(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioFrameRef = useRef<number | null>(null);
@@ -109,6 +111,8 @@ export function CallAssistant({ lead, onClose }: Props) {
     setElapsed(0);
     setRecording(false);
     setPaused(false);
+    recordingRef.current = false;
+    pausedRef.current = false;
     setPermissionDenied(false);
     setInterimTranscript("");
     setSignal("idle");
@@ -116,6 +120,9 @@ export function CallAssistant({ lead, onClose }: Props) {
     finalTranscriptRef.current = "";
     accumulatedMsRef.current = 0;
     startedAtRef.current = null;
+    speechFramesRef.current = 0;
+    toneFramesRef.current = 0;
+    quietFramesRef.current = 0;
     stopSpeechRecognition();
     stopAudioMonitor();
   }, [lead?.id]);
