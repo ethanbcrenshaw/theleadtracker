@@ -79,10 +79,25 @@ export function CallAssistant({ lead, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [updates, setUpdates] = useState<Updates | null>(null);
   const [permissionDenied, setPermissionDenied] = useState(false);
+  const [interimTranscript, setInterimTranscript] = useState("");
+  const [speechSupported, setSpeechSupported] = useState(true);
+  const [signal, setSignal] = useState<SignalKind>("idle");
+  const [audioLevel, setAudioLevel] = useState(0);
 
   const mediaRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<number | null>(null);
+  const startedAtRef = useRef<number | null>(null);
+  const accumulatedMsRef = useRef(0);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const finalTranscriptRef = useRef("");
+  const shouldRestartRecognitionRef = useRef(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const audioFrameRef = useRef<number | null>(null);
+  const speechFramesRef = useRef(0);
+  const toneFramesRef = useRef(0);
+  const quietFramesRef = useRef(0);
 
   // Reset on lead change / close
   useEffect(() => {
