@@ -29,14 +29,18 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lead Management" },
+      { title: "The Lead Tracker" },
       { name: "description", content: "Track, prioritize, and follow up with local business leads." },
       { name: "author", content: "Lead Management" },
-      { property: "og:title", content: "Lead Management" },
+      { property: "og:title", content: "The Lead Tracker" },
       { property: "og:description", content: "Track, prioritize, and follow up with local business leads." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "The Lead Tracker" },
+      { name: "twitter:description", content: "Track, prioritize, and follow up with local business leads." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/e36d4ef1-e3e0-4a0e-803b-5d2c2281a365/id-preview-5d585c85--600ceb58-9e5a-4c69-9ee5-fcfea6a6e7dd.lovable.app-1777936408324.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/e36d4ef1-e3e0-4a0e-803b-5d2c2281a365/id-preview-5d585c85--600ceb58-9e5a-4c69-9ee5-fcfea6a6e7dd.lovable.app-1777936408324.png" },
     ],
     links: [
       {
