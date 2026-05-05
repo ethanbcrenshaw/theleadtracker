@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import "@tanstack/start-client-core/dist/esm/serverRoute";
+// Side-effect import to activate `server` route option augmentation
+import "@tanstack/react-start";
 
 const FC = "https://api.firecrawl.dev/v2";
 const AI = "https://ai.gateway.lovable.dev/v1/chat/completions";
