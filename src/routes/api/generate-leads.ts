@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import "@tanstack/start-client-core/dist/esm/serverRoute";
 
 const FC = "https://api.firecrawl.dev/v2";
 const AI = "https://ai.gateway.lovable.dev/v1/chat/completions";
