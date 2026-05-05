@@ -19,9 +19,21 @@ export function SmoothScroll() {
       smoothWheel: true,
       wheelMultiplier: 1,
       touchMultiplier: 1,
-      // Lower lerp = gentler, smoother catch-up with very light inertia.
-      lerp: 0.06,
+      // Higher lerp = snappier response, less drift after the wheel stops.
+      lerp: 0.18,
+      syncTouch: false,
     });
+
+    // When the user scrolls again mid-animation, snap closer to the target
+    // so a "catch" feels immediate instead of fighting leftover inertia.
+    const onWheel = () => {
+      const target = (lenis as unknown as { targetScroll: number }).targetScroll;
+      const actual = (lenis as unknown as { animatedScroll: number }).animatedScroll;
+      if (Math.abs(target - actual) > 200) {
+        lenis.scrollTo(target, { immediate: true });
+      }
+    };
+    window.addEventListener("wheel", onWheel, { passive: true });
 
     let rafId = 0;
     const raf = (time: number) => {
