@@ -40,6 +40,8 @@ export interface Lead {
   id: string;
   priority: number;
   business: string;
+  owner?: string;
+  ownerSource?: string;
   city: string;
   state: string;
   phone: string;

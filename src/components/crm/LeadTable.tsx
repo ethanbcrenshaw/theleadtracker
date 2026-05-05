@@ -69,6 +69,11 @@ export function LeadTable({ leads, selected, toggleSelect, toggleAll, onView, on
                   <button onClick={() => onView(l)} className="font-medium text-foreground hover:text-navy text-left">
                     {l.business}
                   </button>
+                  {l.owner && (
+                    <div className="text-[11px] text-muted-foreground mt-0.5">
+                      <span className="text-maroon">●</span> {l.owner}
+                    </div>
+                  )}
                   {l.ownerNote && (
                     <div className="text-[11px] text-tan-foreground/80 mt-0.5">{l.ownerNote}</div>
                   )}
