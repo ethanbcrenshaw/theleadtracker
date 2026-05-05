@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X, Mic, Square, Pause, Play, Loader2, Sparkles, AlertCircle, Check,
-  Calendar, Video, FileText, Save, Trash2, Pencil,
+  Calendar, Video, FileText, Save, Trash2, Pencil, Radio,
 } from "lucide-react";
 import type { CallRecord, Lead, LeadStatus } from "@/lib/types";
 import { useLeads } from "@/lib/store";
@@ -30,6 +30,34 @@ type Updates = {
   nextAction: string;
   opportunitySummary: string;
 };
+
+type SignalKind = "idle" | "listening" | "speech" | "quiet" | "tone" | "no-speech";
+
+type RecognitionAlternative = { transcript: string };
+type RecognitionResult = { isFinal: boolean; 0: RecognitionAlternative };
+type RecognitionResultListLike = { length: number; [index: number]: RecognitionResult };
+type SpeechRecognitionEventLike = Event & { resultIndex: number; results: RecognitionResultListLike };
+type SpeechRecognitionLike = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: Event & { error?: string }) => void) | null;
+  onend: (() => void) | null;
+};
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+
+function getSpeechRecognition(): SpeechRecognitionConstructor | null {
+  if (typeof window === "undefined") return null;
+  const w = window as typeof window & {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
 
 function fmtTime(s: number) {
   const m = Math.floor(s / 60).toString().padStart(2, "0");
