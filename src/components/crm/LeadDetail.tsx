@@ -1,4 +1,4 @@
-import { X, Phone, MapPin, Calendar, Sparkles, Plus, ExternalLink, User } from "lucide-react";
+import { X, Phone, MapPin, Calendar, Sparkles, Plus, ExternalLink, User, Mic, Video } from "lucide-react";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Lead, LeadStatus } from "@/lib/types";
@@ -9,6 +9,7 @@ import { formatDate, pitchAngle, sourceLinks } from "@/lib/crm-utils";
 interface Props {
   lead: Lead | null;
   onClose: () => void;
+  onStartCall?: (lead: Lead) => void;
 }
 
 const QUICK_ACTIONS: { label: string; status: LeadStatus; tone: string }[] = [
@@ -20,7 +21,7 @@ const QUICK_ACTIONS: { label: string; status: LeadStatus; tone: string }[] = [
   { label: "Not Interested", status: "Not Interested", tone: "bg-clay/20 text-clay" },
 ];
 
-export function LeadDetail({ lead, onClose }: Props) {
+export function LeadDetail({ lead, onClose, onStartCall }: Props) {
   const setStatus = useLeads((s) => s.setStatus);
   const addNote = useLeads((s) => s.addNote);
   const updateLead = useLeads((s) => s.updateLead);
@@ -64,8 +65,38 @@ export function LeadDetail({ lead, onClose }: Props) {
                 <div className="flex items-center gap-3 mt-3">
                   <QualityBadge q={lead.quality} />
                   <StatusBadge s={lead.status} />
+                  {lead.zoomBooked && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-maroon text-maroon-foreground text-[11px] font-medium">
+                      <Video className="h-3 w-3" /> Zoom {lead.zoomDate ? formatDate(lead.zoomDate) : "booked"}
+                    </span>
+                  )}
                 </div>
+                {onStartCall && (
+                  <button
+                    onClick={() => onStartCall(lead)}
+                    className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-maroon text-maroon-foreground text-sm font-medium hover:opacity-90 shadow-soft"
+                  >
+                    <Mic className="h-4 w-4" /> Start Call Assistant
+                  </button>
+                )}
               </div>
+
+              {(lead.aiSummary || lead.aiNextAction) && (
+                <div className="rounded-2xl bg-gradient-to-br from-navy/[0.05] to-maroon/[0.05] border border-navy/15 p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-navy text-navy-foreground text-[10px] font-semibold uppercase tracking-wider">
+                      <Sparkles className="h-2.5 w-2.5" /> AI Notes
+                    </span>
+                    <span className="text-[11px] text-muted-foreground">latest call summary</span>
+                  </div>
+                  {lead.aiSummary && <p className="text-sm text-foreground/90 leading-relaxed">{lead.aiSummary}</p>}
+                  {lead.aiNextAction && (
+                    <div className="mt-2 text-xs text-foreground/80">
+                      <span className="font-semibold text-maroon">Next:</span> {lead.aiNextAction}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {lead.owner && (
                 <div className="rounded-xl bg-gradient-to-br from-maroon/[0.06] to-navy/[0.04] border border-maroon/20 p-4">
@@ -222,6 +253,31 @@ export function LeadDetail({ lead, onClose }: Props) {
                   </div>
                 )}
               </div>
+
+              {lead.callRecords && lead.callRecords.length > 0 && (
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-2">
+                    <Mic className="h-3.5 w-3.5" /> Call Recordings & Summaries
+                  </div>
+                  <div className="space-y-2">
+                    {[...lead.callRecords].reverse().map((c) => (
+                      <details key={c.id} className="rounded-xl bg-card border border-border p-3">
+                        <summary className="cursor-pointer flex items-center justify-between">
+                          <span className="text-sm font-medium text-foreground">{c.outcome}</span>
+                          <span className="text-xs text-muted-foreground">{formatDate(c.createdAt)}</span>
+                        </summary>
+                        {c.summary && <p className="mt-2 text-sm text-foreground/90">{c.summary}</p>}
+                        {c.nextAction && (
+                          <p className="mt-1 text-xs text-foreground/80"><span className="font-semibold text-maroon">Next:</span> {c.nextAction}</p>
+                        )}
+                        {c.transcript && (
+                          <pre className="mt-2 text-[11px] text-muted-foreground whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">{c.transcript}</pre>
+                        )}
+                      </details>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </motion.aside>
         </>

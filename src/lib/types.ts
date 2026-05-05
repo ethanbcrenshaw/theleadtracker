@@ -36,6 +36,26 @@ export interface CallLog {
   note?: string;
 }
 
+export interface CallRecord {
+  id: string;
+  leadId: string;
+  createdAt: string; // ISO
+  transcript: string;
+  summary: string;
+  outcome: string; // e.g. "Answered — interested", "Voicemail", "Not interested"
+  answered: boolean;
+  interested: boolean;
+  suggestedStatus: LeadStatus | null;
+  followUpDate: string | null; // ISO
+  zoomBooked: boolean;
+  zoomDate: string | null; // ISO
+  objections: string[];
+  websitePainPoints: string[];
+  onlinePresenceNotes: string;
+  nextAction: string;
+  opportunitySummary: string;
+}
+
 export interface Lead {
   id: string;
   priority: number;
@@ -56,4 +76,9 @@ export interface Lead {
   tags: string[];
   ownerNote?: string;
   history: CallLog[];
+  callRecords?: CallRecord[];
+  aiSummary?: string;
+  aiNextAction?: string;
+  zoomBooked?: boolean;
+  zoomDate?: string;
 }

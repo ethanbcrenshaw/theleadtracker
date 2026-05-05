@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Lead, LeadStatus, Quality } from "./types";
+import type { CallRecord, Lead, LeadStatus, Quality } from "./types";
 import { seedLeads } from "@/data/seed";
 
 interface LeadStore {
@@ -14,6 +14,7 @@ interface LeadStore {
   bulkDelete: (ids: string[]) => void;
   addLead: (lead: Lead) => void;
   addLeads: (leads: Lead[]) => void;
+  addCallRecord: (id: string, record: CallRecord) => void;
 }
 
 export const useLeads = create<LeadStore>()(
@@ -76,6 +77,14 @@ export const useLeads = create<LeadStore>()(
         set((s) => ({ leads: s.leads.filter((l) => !ids.includes(l.id)) })),
       addLead: (lead) => set((s) => ({ leads: [lead, ...s.leads] })),
       addLeads: (leads) => set((s) => ({ leads: [...leads, ...s.leads] })),
+      addCallRecord: (id, record) =>
+        set((s) => ({
+          leads: s.leads.map((l) =>
+            l.id === id
+              ? { ...l, callRecords: [...(l.callRecords ?? []), record] }
+              : l
+          ),
+        })),
     }),
     { name: "lead-mgmt-v1" }
   )

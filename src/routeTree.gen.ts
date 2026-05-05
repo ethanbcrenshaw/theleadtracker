@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiSummarizeCallRouteImport } from './routes/api/summarize-call'
 import { Route as ApiGenerateLeadsRouteImport } from './routes/api/generate-leads'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSummarizeCallRoute = ApiSummarizeCallRouteImport.update({
+  id: '/api/summarize-call',
+  path: '/api/summarize-call',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiGenerateLeadsRoute = ApiGenerateLeadsRouteImport.update({
@@ -26,27 +32,31 @@ const ApiGenerateLeadsRoute = ApiGenerateLeadsRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/generate-leads': typeof ApiGenerateLeadsRoute
+  '/api/summarize-call': typeof ApiSummarizeCallRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/generate-leads': typeof ApiGenerateLeadsRoute
+  '/api/summarize-call': typeof ApiSummarizeCallRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/generate-leads': typeof ApiGenerateLeadsRoute
+  '/api/summarize-call': typeof ApiSummarizeCallRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/generate-leads'
+  fullPaths: '/' | '/api/generate-leads' | '/api/summarize-call'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/generate-leads'
-  id: '__root__' | '/' | '/api/generate-leads'
+  to: '/' | '/api/generate-leads' | '/api/summarize-call'
+  id: '__root__' | '/' | '/api/generate-leads' | '/api/summarize-call'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiGenerateLeadsRoute: typeof ApiGenerateLeadsRoute
+  ApiSummarizeCallRoute: typeof ApiSummarizeCallRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -56,6 +66,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/summarize-call': {
+      id: '/api/summarize-call'
+      path: '/api/summarize-call'
+      fullPath: '/api/summarize-call'
+      preLoaderRoute: typeof ApiSummarizeCallRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/generate-leads': {
@@ -71,6 +88,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiGenerateLeadsRoute: ApiGenerateLeadsRoute,
+  ApiSummarizeCallRoute: ApiSummarizeCallRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
