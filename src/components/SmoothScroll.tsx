@@ -16,12 +16,11 @@ export function SmoothScroll() {
     if (isTouch) return;
 
     const lenis = new Lenis({
-      duration: 1.05,
-      easing: (t: number) => 1 - Math.pow(1 - t, 3),
       smoothWheel: true,
       wheelMultiplier: 1,
-      touchMultiplier: 1.2,
-      lerp: 0.1,
+      touchMultiplier: 1,
+      // Lower lerp = gentler, smoother catch-up with very light inertia.
+      lerp: 0.06,
     });
 
     let rafId = 0;
