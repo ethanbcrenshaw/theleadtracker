@@ -570,9 +570,20 @@ export function CallAssistant({ lead, onClose }: Props) {
                     </>
                   )}
                 </div>
-                <p className="text-[11px] text-muted-foreground italic mt-3">
-                  Real-time transcription isn't connected yet. Stop the recording, then paste or type the call transcript below — the AI will extract structured updates.
-                </p>
+                <div className="mt-4 grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl bg-card/70 border border-border px-3 py-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Radio className="h-3.5 w-3.5 text-maroon shrink-0" />
+                    <span className="text-xs font-medium text-foreground truncate">{signalLabel(signal)}</span>
+                  </div>
+                  <div className="h-2 w-24 rounded-full bg-secondary overflow-hidden">
+                    <div className="h-full bg-maroon transition-all" style={{ width: `${audioLevel}%` }} />
+                  </div>
+                </div>
+                {!speechSupported && (
+                  <p className="text-[11px] text-muted-foreground italic mt-3">
+                    This browser does not support live speech recognition. You can still paste the transcript and let AI analyze it.
+                  </p>
+                )}
               </div>
 
               {/* Transcript box */}
@@ -591,10 +602,15 @@ export function CallAssistant({ lead, onClose }: Props) {
                 <textarea
                   value={transcript}
                   onChange={(e) => setTranscript(e.target.value)}
-                  placeholder="Paste or type the call transcript here…"
+                  placeholder="Live transcription will appear here. You can also paste or edit the transcript before AI review…"
                   rows={10}
                   className="w-full px-3 py-2 rounded-xl bg-card border border-border text-sm resize-y leading-relaxed font-mono"
                 />
+                {interimTranscript && (
+                  <div className="mt-2 rounded-lg bg-secondary/70 border border-border px-3 py-2 text-xs text-muted-foreground font-mono">
+                    {interimTranscript}
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-2">
