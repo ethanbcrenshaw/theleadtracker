@@ -90,23 +90,23 @@ function Dashboard() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b border-border bg-gradient-to-b from-tan/15 to-transparent">
-        <div className="max-w-[1500px] mx-auto px-6 py-7">
-          <div className="flex items-start justify-between flex-wrap gap-4">
+      <header className="border-b border-border bg-gradient-to-b from-maroon/[0.04] via-background to-transparent">
+        <div className="max-w-[1500px] mx-auto px-8 py-12">
+          <div className="flex items-start justify-between flex-wrap gap-6">
             <div>
-              <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-tan-foreground/80 mb-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-tan" />
+              <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-maroon mb-4">
+                <span className="h-1.5 w-1.5 rounded-full bg-maroon" />
                 CRM · Local Business Outreach
               </div>
-              <h1 className="font-display text-4xl sm:text-5xl font-medium text-foreground">
+              <h1 className="font-display text-5xl sm:text-6xl font-medium text-navy tracking-tight">
                 Lead Management
               </h1>
-              <p className="mt-2 text-muted-foreground max-w-xl">
+              <p className="mt-4 text-muted-foreground max-w-xl leading-relaxed">
                 Track, prioritize, and follow up with local business leads.
                 <span className="italic"> Start with your highest-opportunity leads.</span>
               </p>
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-3 flex-wrap">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <input
@@ -117,15 +117,15 @@ function Dashboard() {
                 />
               </div>
               <button onClick={() => setAiOpen(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-br from-navy to-[oklch(0.32_0.07_265)] text-navy-foreground text-sm font-medium shadow-soft hover:shadow-elev">
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-br from-navy to-[oklch(0.30_0.08_265)] text-navy-foreground text-sm font-medium shadow-soft hover:shadow-elev transition-shadow">
                 <Sparkles className="h-4 w-4" /> Generate Leads with AI
               </button>
               <button onClick={() => exportCSV(filtered)}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-card border border-border text-sm font-medium hover:bg-secondary">
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-card border border-border text-sm font-medium hover:bg-secondary transition-colors">
                 <Download className="h-4 w-4" /> Export CSV
               </button>
               <button
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-tan text-tan-foreground text-sm font-medium hover:opacity-90"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-maroon text-maroon-foreground text-sm font-medium hover:opacity-90 transition-opacity"
                 onClick={() => alert("Add Lead form coming soon — for now use AI Generate.")}>
                 <Plus className="h-4 w-4" /> Add Lead
               </button>
@@ -134,12 +134,12 @@ function Dashboard() {
         </div>
       </header>
 
-      <main className="max-w-[1500px] mx-auto px-6 py-6 space-y-5">
+      <main className="max-w-[1500px] mx-auto px-8 py-10 space-y-8">
         <StatsCards leads={leads} />
         <Filters filters={filters} setFilters={setFilters} cities={cities} />
 
         {/* Tabs */}
-        <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center justify-between flex-wrap gap-3 pt-2">
           <div className="inline-flex p-1 rounded-2xl bg-card border border-border shadow-soft">
             {tabs.map((t) => (
               <button
@@ -174,7 +174,7 @@ function Dashboard() {
         {view === "followup" && <FollowUpView leads={filtered} onView={setActive} />}
         {view === "opportunities" && <OpportunitiesView leads={filtered} onView={setActive} />}
 
-        <footer className="text-center text-xs text-muted-foreground py-8 italic">
+        <footer className="text-center text-sm text-muted-foreground py-12 italic font-display">
           Facebook-only businesses are often strong website prospects. Keep going. ✦
         </footer>
       </main>
