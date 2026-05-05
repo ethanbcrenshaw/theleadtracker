@@ -44,6 +44,7 @@ export function SmoothScroll() {
 
     return () => {
       cancelAnimationFrame(rafId);
+      window.removeEventListener("wheel", onWheel);
       lenis.destroy();
     };
   }, []);
