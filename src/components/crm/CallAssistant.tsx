@@ -110,12 +110,22 @@ export function CallAssistant({ lead, onClose }: Props) {
     setRecording(false);
     setPaused(false);
     setPermissionDenied(false);
+    setInterimTranscript("");
+    setSignal("idle");
+    setAudioLevel(0);
+    finalTranscriptRef.current = "";
+    accumulatedMsRef.current = 0;
+    startedAtRef.current = null;
+    stopSpeechRecognition();
+    stopAudioMonitor();
   }, [lead?.id]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       stopTimer();
+      stopSpeechRecognition();
+      stopAudioMonitor();
       streamRef.current?.getTracks().forEach((t) => t.stop());
     };
   }, []);
@@ -125,6 +135,31 @@ export function CallAssistant({ lead, onClose }: Props) {
       window.clearInterval(timerRef.current);
       timerRef.current = null;
     }
+  }
+
+  function startTimer() {
+    stopTimer();
+    startedAtRef.current = Date.now();
+    timerRef.current = window.setInterval(() => {
+      if (startedAtRef.current === null) return;
+      setElapsed(Math.floor((accumulatedMsRef.current + Date.now() - startedAtRef.current) / 1000));
+    }, 250);
+  }
+
+  function pauseTimer() {
+    if (startedAtRef.current !== null) {
+      accumulatedMsRef.current += Date.now() - startedAtRef.current;
+      startedAtRef.current = null;
+      setElapsed(Math.floor(accumulatedMsRef.current / 1000));
+    }
+    stopTimer();
+  }
+
+  function resetTimer() {
+    stopTimer();
+    startedAtRef.current = null;
+    accumulatedMsRef.current = 0;
+    setElapsed(0);
   }
 
   async function startRecording() {
