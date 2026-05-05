@@ -162,6 +162,115 @@ export function CallAssistant({ lead, onClose }: Props) {
     setElapsed(0);
   }
 
+  function startSpeechRecognition() {
+    const Recognition = getSpeechRecognition();
+    if (!Recognition) {
+      setSpeechSupported(false);
+      return;
+    }
+    setSpeechSupported(true);
+    shouldRestartRecognitionRef.current = true;
+    const recognition = new Recognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+    recognition.onresult = (event) => {
+      let finalText = "";
+      let interimText = "";
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const piece = event.results[i][0]?.transcript ?? "";
+        if (event.results[i].isFinal) finalText += piece;
+        else interimText += piece;
+      }
+      if (finalText.trim()) {
+        finalTranscriptRef.current = `${finalTranscriptRef.current} ${finalText.trim()}`.trim();
+        setTranscript(finalTranscriptRef.current);
+        speechFramesRef.current += 10;
+        setSignal("speech");
+      }
+      setInterimTranscript(interimText.trim());
+    };
+    recognition.onerror = (event) => {
+      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+        shouldRestartRecognitionRef.current = false;
+        setPermissionDenied(true);
+        setError("Microphone speech recognition was blocked. You can still paste the transcript manually.");
+      }
+    };
+    recognition.onend = () => {
+      if (shouldRestartRecognitionRef.current && recording && !paused) {
+        window.setTimeout(() => {
+          try { recognition.start(); } catch { /* already started */ }
+        }, 250);
+      }
+    };
+    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+      setSignal("listening");
+    } catch {
+      setSpeechSupported(false);
+    }
+  }
+
+  function stopSpeechRecognition() {
+    shouldRestartRecognitionRef.current = false;
+    const recognition = recognitionRef.current;
+    if (!recognition) return;
+    recognition.onend = null;
+    try { recognition.stop(); } catch { /* noop */ }
+    recognitionRef.current = null;
+    setInterimTranscript("");
+  }
+
+  function startAudioMonitor(stream: MediaStream) {
+    stopAudioMonitor();
+    const AudioCtor = window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtor) return;
+    const ctx = new AudioCtor();
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.82;
+    ctx.createMediaStreamSource(stream).connect(analyser);
+    audioContextRef.current = ctx;
+    analyserRef.current = analyser;
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    const tick = () => {
+      analyser.getByteFrequencyData(data);
+      const avg = data.reduce((sum, v) => sum + v, 0) / data.length;
+      const peak = Math.max(...data);
+      const peakIndex = data.findIndex((v) => v === peak);
+      const peakHz = peakIndex * ctx.sampleRate / analyser.fftSize;
+      const level = Math.min(100, Math.round((avg / 80) * 100));
+      setAudioLevel(level);
+
+      if (avg < 4) {
+        quietFramesRef.current += 1;
+        if (quietFramesRef.current > 90 && !finalTranscriptRef.current) setSignal("no-speech");
+      } else {
+        quietFramesRef.current = 0;
+        const isToneLike = peak > 95 && avg > 10 && peakHz >= 300 && peakHz <= 700;
+        if (isToneLike && !finalTranscriptRef.current) {
+          toneFramesRef.current += 1;
+          if (toneFramesRef.current > 40) setSignal("tone");
+        } else if (!finalTranscriptRef.current) {
+          setSignal("quiet");
+        }
+      }
+      audioFrameRef.current = window.requestAnimationFrame(tick);
+    };
+    tick();
+  }
+
+  function stopAudioMonitor() {
+    if (audioFrameRef.current) window.cancelAnimationFrame(audioFrameRef.current);
+    audioFrameRef.current = null;
+    analyserRef.current = null;
+    audioContextRef.current?.close().catch(() => undefined);
+    audioContextRef.current = null;
+    setAudioLevel(0);
+  }
+
   async function startRecording() {
     setError(null);
     try {
