@@ -1,4 +1,4 @@
-import { X, Phone, MapPin, Calendar, Sparkles, Plus, ExternalLink } from "lucide-react";
+import { X, Phone, MapPin, Calendar, Sparkles, Plus, ExternalLink, User } from "lucide-react";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Lead, LeadStatus } from "@/lib/types";
@@ -66,6 +66,25 @@ export function LeadDetail({ lead, onClose }: Props) {
                   <StatusBadge s={lead.status} />
                 </div>
               </div>
+
+              {lead.owner && (
+                <div className="rounded-xl bg-gradient-to-br from-maroon/[0.06] to-navy/[0.04] border border-maroon/20 p-4">
+                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-maroon mb-2">
+                    <User className="h-3.5 w-3.5" /> Owner
+                  </div>
+                  <div className="font-display text-xl text-navy">{lead.owner}</div>
+                  {lead.ownerSource && (
+                    <a
+                      href={lead.ownerSource.split(/[ ,&]+http/)[0].startsWith("http") ? lead.ownerSource.split(/\s|,/)[0] : "#"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-navy"
+                    >
+                      <ExternalLink className="h-3 w-3" /> source
+                    </a>
+                  )}
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <a href={`tel:${lead.phone}`} className="rounded-xl bg-secondary border border-border p-3 hover:bg-tan/15 transition-colors">
