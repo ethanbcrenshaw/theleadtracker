@@ -286,9 +286,17 @@ export function CallAssistant({ lead, onClose }: Props) {
       const mr = new MediaRecorder(stream);
       mediaRef.current = mr;
       mr.start();
+      finalTranscriptRef.current = transcript.trim();
+      recordingRef.current = true;
+      pausedRef.current = false;
+      speechFramesRef.current = 0;
+      toneFramesRef.current = 0;
+      quietFramesRef.current = 0;
       setRecording(true);
       setPaused(false);
-      timerRef.current = window.setInterval(() => setElapsed((e) => e + 1), 1000);
+      startTimer();
+      startAudioMonitor(stream);
+      startSpeechRecognition();
     } catch {
       setPermissionDenied(true);
       setError("Microphone permission denied. You can paste a transcript manually below.");
@@ -299,12 +307,16 @@ export function CallAssistant({ lead, onClose }: Props) {
     if (!mediaRef.current) return;
     if (paused) {
       mediaRef.current.resume();
+      pausedRef.current = false;
       setPaused(false);
-      timerRef.current = window.setInterval(() => setElapsed((e) => e + 1), 1000);
+      startTimer();
+      startSpeechRecognition();
     } else {
       mediaRef.current.pause();
+      pausedRef.current = true;
       setPaused(true);
-      stopTimer();
+      pauseTimer();
+      stopSpeechRecognition();
     }
   }
 
@@ -313,11 +325,20 @@ export function CallAssistant({ lead, onClose }: Props) {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     mediaRef.current = null;
     streamRef.current = null;
-    stopTimer();
+    recordingRef.current = false;
+    pausedRef.current = false;
+    pauseTimer();
+    stopSpeechRecognition();
+    stopAudioMonitor();
     setRecording(false);
     setPaused(false);
-    // NOTE: Real STT (Whisper / Deepgram / AssemblyAI) plugs in here:
-    // upload the recorded blob to a server route and set transcript from the response.
+    if (!finalTranscriptRef.current.trim()) {
+      if (signal === "tone") {
+        setError("Dial tone/no answer detected. Review the suggested follow-up before saving.");
+      } else if (elapsed >= 8) {
+        setError("No speech was detected. Review the suggested no-answer follow-up before saving.");
+      }
+    }
   }
 
   async function processTranscript() {
