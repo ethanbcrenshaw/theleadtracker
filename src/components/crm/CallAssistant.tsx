@@ -205,7 +205,7 @@ export function CallAssistant({ lead, onClose }: Props) {
       }
     };
     recognition.onend = () => {
-      if (shouldRestartRecognitionRef.current && recording && !paused) {
+      if (shouldRestartRecognitionRef.current && recordingRef.current && !pausedRef.current) {
         window.setTimeout(() => {
           try { recognition.start(); } catch { /* already started */ }
         }, 250);
