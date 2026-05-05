@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X, Mic, Square, Pause, Play, Loader2, Sparkles, AlertCircle, Check,
-  Calendar, Video, FileText, Save, Trash2, Pencil,
+  Calendar, Video, FileText, Save, Trash2, Pencil, Radio,
 } from "lucide-react";
 import type { CallRecord, Lead, LeadStatus } from "@/lib/types";
 import { useLeads } from "@/lib/store";
@@ -31,10 +31,47 @@ type Updates = {
   opportunitySummary: string;
 };
 
+type SignalKind = "idle" | "listening" | "speech" | "quiet" | "tone" | "no-speech";
+
+type RecognitionAlternative = { transcript: string };
+type RecognitionResult = { isFinal: boolean; 0: RecognitionAlternative };
+type RecognitionResultListLike = { length: number; [index: number]: RecognitionResult };
+type SpeechRecognitionEventLike = Event & { resultIndex: number; results: RecognitionResultListLike };
+type SpeechRecognitionLike = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: Event & { error?: string }) => void) | null;
+  onend: (() => void) | null;
+};
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+
+function getSpeechRecognition(): SpeechRecognitionConstructor | null {
+  if (typeof window === "undefined") return null;
+  const w = window as typeof window & {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
+
 function fmtTime(s: number) {
   const m = Math.floor(s / 60).toString().padStart(2, "0");
   const r = Math.floor(s % 60).toString().padStart(2, "0");
   return `${m}:${r}`;
+}
+
+function signalLabel(signal: SignalKind) {
+  if (signal === "speech") return "Transcribing speech";
+  if (signal === "tone") return "Tone/no answer detected";
+  if (signal === "no-speech") return "No speech detected";
+  if (signal === "quiet") return "Listening";
+  if (signal === "listening") return "Mic ready";
+  return "Idle";
 }
 
 export function CallAssistant({ lead, onClose }: Props) {
@@ -51,10 +88,27 @@ export function CallAssistant({ lead, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [updates, setUpdates] = useState<Updates | null>(null);
   const [permissionDenied, setPermissionDenied] = useState(false);
+  const [interimTranscript, setInterimTranscript] = useState("");
+  const [speechSupported, setSpeechSupported] = useState(true);
+  const [signal, setSignal] = useState<SignalKind>("idle");
+  const [audioLevel, setAudioLevel] = useState(0);
 
   const mediaRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<number | null>(null);
+  const startedAtRef = useRef<number | null>(null);
+  const accumulatedMsRef = useRef(0);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const finalTranscriptRef = useRef("");
+  const shouldRestartRecognitionRef = useRef(false);
+  const pausedRef = useRef(false);
+  const recordingRef = useRef(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const audioFrameRef = useRef<number | null>(null);
+  const speechFramesRef = useRef(0);
+  const toneFramesRef = useRef(0);
+  const quietFramesRef = useRef(0);
 
   // Reset on lead change / close
   useEffect(() => {
@@ -66,13 +120,28 @@ export function CallAssistant({ lead, onClose }: Props) {
     setElapsed(0);
     setRecording(false);
     setPaused(false);
+    recordingRef.current = false;
+    pausedRef.current = false;
     setPermissionDenied(false);
+    setInterimTranscript("");
+    setSignal("idle");
+    setAudioLevel(0);
+    finalTranscriptRef.current = "";
+    accumulatedMsRef.current = 0;
+    startedAtRef.current = null;
+    speechFramesRef.current = 0;
+    toneFramesRef.current = 0;
+    quietFramesRef.current = 0;
+    stopSpeechRecognition();
+    stopAudioMonitor();
   }, [lead?.id]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       stopTimer();
+      stopSpeechRecognition();
+      stopAudioMonitor();
       streamRef.current?.getTracks().forEach((t) => t.stop());
     };
   }, []);
@@ -84,6 +153,140 @@ export function CallAssistant({ lead, onClose }: Props) {
     }
   }
 
+  function startTimer() {
+    stopTimer();
+    startedAtRef.current = Date.now();
+    timerRef.current = window.setInterval(() => {
+      if (startedAtRef.current === null) return;
+      setElapsed(Math.floor((accumulatedMsRef.current + Date.now() - startedAtRef.current) / 1000));
+    }, 250);
+  }
+
+  function pauseTimer() {
+    if (startedAtRef.current !== null) {
+      accumulatedMsRef.current += Date.now() - startedAtRef.current;
+      startedAtRef.current = null;
+      setElapsed(Math.floor(accumulatedMsRef.current / 1000));
+    }
+    stopTimer();
+  }
+
+  function resetTimer() {
+    stopTimer();
+    startedAtRef.current = null;
+    accumulatedMsRef.current = 0;
+    setElapsed(0);
+  }
+
+  function startSpeechRecognition() {
+    const Recognition = getSpeechRecognition();
+    if (!Recognition) {
+      setSpeechSupported(false);
+      return;
+    }
+    setSpeechSupported(true);
+    shouldRestartRecognitionRef.current = true;
+    const recognition = new Recognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+    recognition.onresult = (event) => {
+      let finalText = "";
+      let interimText = "";
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const piece = event.results[i][0]?.transcript ?? "";
+        if (event.results[i].isFinal) finalText += piece;
+        else interimText += piece;
+      }
+      if (finalText.trim()) {
+        finalTranscriptRef.current = `${finalTranscriptRef.current} ${finalText.trim()}`.trim();
+        setTranscript(finalTranscriptRef.current);
+        speechFramesRef.current += 10;
+        setSignal("speech");
+      }
+      setInterimTranscript(interimText.trim());
+    };
+    recognition.onerror = (event) => {
+      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+        shouldRestartRecognitionRef.current = false;
+        setPermissionDenied(true);
+        setError("Microphone speech recognition was blocked. You can still paste the transcript manually.");
+      }
+    };
+    recognition.onend = () => {
+      if (shouldRestartRecognitionRef.current && recordingRef.current && !pausedRef.current) {
+        window.setTimeout(() => {
+          try { recognition.start(); } catch { /* already started */ }
+        }, 250);
+      }
+    };
+    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+      setSignal("listening");
+    } catch {
+      setSpeechSupported(false);
+    }
+  }
+
+  function stopSpeechRecognition() {
+    shouldRestartRecognitionRef.current = false;
+    const recognition = recognitionRef.current;
+    if (!recognition) return;
+    recognition.onend = null;
+    try { recognition.stop(); } catch { /* noop */ }
+    recognitionRef.current = null;
+    setInterimTranscript("");
+  }
+
+  function startAudioMonitor(stream: MediaStream) {
+    stopAudioMonitor();
+    const AudioCtor = window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtor) return;
+    const ctx = new AudioCtor();
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.82;
+    ctx.createMediaStreamSource(stream).connect(analyser);
+    audioContextRef.current = ctx;
+    analyserRef.current = analyser;
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    const tick = () => {
+      analyser.getByteFrequencyData(data);
+      const avg = data.reduce((sum, v) => sum + v, 0) / data.length;
+      const peak = Math.max(...data);
+      const peakIndex = data.findIndex((v) => v === peak);
+      const peakHz = peakIndex * ctx.sampleRate / analyser.fftSize;
+      const level = Math.min(100, Math.round((avg / 80) * 100));
+      setAudioLevel(level);
+
+      if (avg < 4) {
+        quietFramesRef.current += 1;
+        if (quietFramesRef.current > 90 && !finalTranscriptRef.current) setSignal("no-speech");
+      } else {
+        quietFramesRef.current = 0;
+        const isToneLike = peak > 95 && avg > 10 && peakHz >= 300 && peakHz <= 700;
+        if (isToneLike && !finalTranscriptRef.current) {
+          toneFramesRef.current += 1;
+          if (toneFramesRef.current > 40) setSignal("tone");
+        } else if (!finalTranscriptRef.current) {
+          setSignal("quiet");
+        }
+      }
+      audioFrameRef.current = window.requestAnimationFrame(tick);
+    };
+    tick();
+  }
+
+  function stopAudioMonitor() {
+    if (audioFrameRef.current) window.cancelAnimationFrame(audioFrameRef.current);
+    audioFrameRef.current = null;
+    analyserRef.current = null;
+    audioContextRef.current?.close().catch(() => undefined);
+    audioContextRef.current = null;
+    setAudioLevel(0);
+  }
+
   async function startRecording() {
     setError(null);
     try {
@@ -92,9 +295,18 @@ export function CallAssistant({ lead, onClose }: Props) {
       const mr = new MediaRecorder(stream);
       mediaRef.current = mr;
       mr.start();
+      resetTimer();
+      finalTranscriptRef.current = transcript.trim();
+      recordingRef.current = true;
+      pausedRef.current = false;
+      speechFramesRef.current = 0;
+      toneFramesRef.current = 0;
+      quietFramesRef.current = 0;
       setRecording(true);
       setPaused(false);
-      timerRef.current = window.setInterval(() => setElapsed((e) => e + 1), 1000);
+      startTimer();
+      startAudioMonitor(stream);
+      startSpeechRecognition();
     } catch {
       setPermissionDenied(true);
       setError("Microphone permission denied. You can paste a transcript manually below.");
@@ -105,12 +317,16 @@ export function CallAssistant({ lead, onClose }: Props) {
     if (!mediaRef.current) return;
     if (paused) {
       mediaRef.current.resume();
+      pausedRef.current = false;
       setPaused(false);
-      timerRef.current = window.setInterval(() => setElapsed((e) => e + 1), 1000);
+      startTimer();
+      startSpeechRecognition();
     } else {
       mediaRef.current.pause();
+      pausedRef.current = true;
       setPaused(true);
-      stopTimer();
+      pauseTimer();
+      stopSpeechRecognition();
     }
   }
 
@@ -119,17 +335,66 @@ export function CallAssistant({ lead, onClose }: Props) {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     mediaRef.current = null;
     streamRef.current = null;
-    stopTimer();
+    recordingRef.current = false;
+    pausedRef.current = false;
+    pauseTimer();
+    stopSpeechRecognition();
+    stopAudioMonitor();
     setRecording(false);
     setPaused(false);
-    // NOTE: Real STT (Whisper / Deepgram / AssemblyAI) plugs in here:
-    // upload the recorded blob to a server route and set transcript from the response.
+    if (!finalTranscriptRef.current.trim()) {
+      if (signal === "tone") {
+        setError("Dial tone/no answer detected. Review the suggested follow-up before saving.");
+      } else if (elapsed >= 8) {
+        setError("No speech was detected. Review the suggested no-answer follow-up before saving.");
+      }
+    }
+  }
+
+  function followUpTomorrow() {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function noAnswerUpdates(kind: "Dial tone / no answer" | "No speech detected"): Updates {
+    return {
+      summary:
+        kind === "Dial tone / no answer"
+          ? "The call did not connect to a conversation. The assistant detected call-tone audio but no spoken response from the lead."
+          : "No conversation was captured during the call. The lead should be treated as not reached unless a voicemail was intentionally left.",
+      outcome: kind,
+      answered: false,
+      interested: false,
+      suggestedStatus: "Callback Scheduled",
+      followUpDate: followUpTomorrow(),
+      zoomBooked: false,
+      zoomDate: null,
+      objections: [],
+      websitePainPoints: [],
+      onlinePresenceNotes: "No spoken conversation was detected.",
+      nextAction: "Call again later and try to reach the owner directly.",
+      opportunitySummary: "No sales opportunity was discussed because the lead did not answer.",
+    };
   }
 
   async function processTranscript() {
     if (!lead) return;
-    if (!transcript.trim() || transcript.trim().length < 10) {
-      setError("Please enter or record a transcript (at least a sentence) before summarizing.");
+    const cleanTranscript = transcript.trim();
+    if (!cleanTranscript || cleanTranscript.length < 10) {
+      if (signal === "tone") {
+        setUpdates(noAnswerUpdates("Dial tone / no answer"));
+        setStage("review");
+        setError(null);
+        return;
+      }
+      if (elapsed >= 8 || signal === "no-speech") {
+        setUpdates(noAnswerUpdates("No speech detected"));
+        setStage("review");
+        setError(null);
+        return;
+      }
+      setError("Record the call until speech appears, or paste a transcript before summarizing.");
       return;
     }
     setStage("processing");
@@ -139,7 +404,12 @@ export function CallAssistant({ lead, onClose }: Props) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          transcript,
+          transcript: cleanTranscript,
+          callSignals: {
+            elapsedSeconds: elapsed,
+            detectedDialTone: signal === "tone",
+            detectedNoSpeech: signal === "no-speech",
+          },
           lead: {
             business: lead.business,
             city: lead.city,
@@ -300,9 +570,20 @@ export function CallAssistant({ lead, onClose }: Props) {
                     </>
                   )}
                 </div>
-                <p className="text-[11px] text-muted-foreground italic mt-3">
-                  Real-time transcription isn't connected yet. Stop the recording, then paste or type the call transcript below — the AI will extract structured updates.
-                </p>
+                <div className="mt-4 grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl bg-card/70 border border-border px-3 py-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Radio className="h-3.5 w-3.5 text-maroon shrink-0" />
+                    <span className="text-xs font-medium text-foreground truncate">{signalLabel(signal)}</span>
+                  </div>
+                  <div className="h-2 w-24 rounded-full bg-secondary overflow-hidden">
+                    <div className="h-full bg-maroon transition-all" style={{ width: `${audioLevel}%` }} />
+                  </div>
+                </div>
+                {!speechSupported && (
+                  <p className="text-[11px] text-muted-foreground italic mt-3">
+                    This browser does not support live speech recognition. You can still paste the transcript and let AI analyze it.
+                  </p>
+                )}
               </div>
 
               {/* Transcript box */}
@@ -321,10 +602,15 @@ export function CallAssistant({ lead, onClose }: Props) {
                 <textarea
                   value={transcript}
                   onChange={(e) => setTranscript(e.target.value)}
-                  placeholder="Paste or type the call transcript here…"
+                  placeholder="Live transcription will appear here. You can also paste or edit the transcript before AI review…"
                   rows={10}
                   className="w-full px-3 py-2 rounded-xl bg-card border border-border text-sm resize-y leading-relaxed font-mono"
                 />
+                {interimTranscript && (
+                  <div className="mt-2 rounded-lg bg-secondary/70 border border-border px-3 py-2 text-xs text-muted-foreground font-mono">
+                    {interimTranscript}
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-2">
@@ -333,7 +619,7 @@ export function CallAssistant({ lead, onClose }: Props) {
                   Cancel
                 </button>
                 <button onClick={processTranscript}
-                  disabled={!transcript.trim()}
+                  disabled={!transcript.trim() && elapsed < 8 && signal !== "tone" && signal !== "no-speech"}
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-navy text-navy-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50">
                   <Sparkles className="h-4 w-4" /> Summarize with AI
                 </button>
