@@ -65,6 +65,15 @@ function fmtTime(s: number) {
   return `${m}:${r}`;
 }
 
+function signalLabel(signal: SignalKind) {
+  if (signal === "speech") return "Transcribing speech";
+  if (signal === "tone") return "Tone/no answer detected";
+  if (signal === "no-speech") return "No speech detected";
+  if (signal === "quiet") return "Listening";
+  if (signal === "listening") return "Mic ready";
+  return "Idle";
+}
+
 export function CallAssistant({ lead, onClose }: Props) {
   const updateLead = useLeads((s) => s.updateLead);
   const addCallRecord = useLeads((s) => s.addCallRecord);
@@ -286,6 +295,7 @@ export function CallAssistant({ lead, onClose }: Props) {
       const mr = new MediaRecorder(stream);
       mediaRef.current = mr;
       mr.start();
+      resetTimer();
       finalTranscriptRef.current = transcript.trim();
       recordingRef.current = true;
       pausedRef.current = false;
