@@ -45,7 +45,7 @@ export function AIGenerateModal({ open, onClose }: Props) {
 
       const cleaned: Lead[] = [];
       for (const r of raw) {
-        const business = String(r.business || "").trim();
+        const business = String(r.business || r.business_name || r.name || "").trim();
         if (!business) continue;
         const key = business.toLowerCase();
         const phoneDigits = String(r.phone || "").replace(/\D/g, "");
