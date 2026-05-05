@@ -341,10 +341,50 @@ export function CallAssistant({ lead, onClose }: Props) {
     }
   }
 
+  function followUpTomorrow() {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function noAnswerUpdates(kind: "Dial tone / no answer" | "No speech detected"): Updates {
+    return {
+      summary:
+        kind === "Dial tone / no answer"
+          ? "The call did not connect to a conversation. The assistant detected call-tone audio but no spoken response from the lead."
+          : "No conversation was captured during the call. The lead should be treated as not reached unless a voicemail was intentionally left.",
+      outcome: kind,
+      answered: false,
+      interested: false,
+      suggestedStatus: "Callback Scheduled",
+      followUpDate: followUpTomorrow(),
+      zoomBooked: false,
+      zoomDate: null,
+      objections: [],
+      websitePainPoints: [],
+      onlinePresenceNotes: "No spoken conversation was detected.",
+      nextAction: "Call again later and try to reach the owner directly.",
+      opportunitySummary: "No sales opportunity was discussed because the lead did not answer.",
+    };
+  }
+
   async function processTranscript() {
     if (!lead) return;
-    if (!transcript.trim() || transcript.trim().length < 10) {
-      setError("Please enter or record a transcript (at least a sentence) before summarizing.");
+    const cleanTranscript = transcript.trim();
+    if (!cleanTranscript || cleanTranscript.length < 10) {
+      if (signal === "tone") {
+        setUpdates(noAnswerUpdates("Dial tone / no answer"));
+        setStage("review");
+        setError(null);
+        return;
+      }
+      if (elapsed >= 8 || signal === "no-speech") {
+        setUpdates(noAnswerUpdates("No speech detected"));
+        setStage("review");
+        setError(null);
+        return;
+      }
+      setError("Record the call until speech appears, or paste a transcript before summarizing.");
       return;
     }
     setStage("processing");
@@ -354,7 +394,12 @@ export function CallAssistant({ lead, onClose }: Props) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          transcript,
+          transcript: cleanTranscript,
+          callSignals: {
+            elapsedSeconds: elapsed,
+            detectedDialTone: signal === "tone",
+            detectedNoSpeech: signal === "no-speech",
+          },
           lead: {
             business: lead.business,
             city: lead.city,
