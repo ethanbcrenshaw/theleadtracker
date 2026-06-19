@@ -1,8 +1,8 @@
-import { Eye, Pencil, ChevronDown, Mic } from "lucide-react";
-import type { Lead, LeadStatus } from "@/lib/types";
+import { Eye, Pencil, ChevronDown, Mic, ArrowUp, ArrowDown } from "lucide-react";
+import type { Lead, LeadStatus, Quality } from "@/lib/types";
 import { QualityBadge, StatusBadge } from "./Badges";
 import { formatDate, isValidContactDate, relativeFollowUp, STATUSES } from "@/lib/crm-utils";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 interface Props {
   leads: Lead[];
@@ -25,9 +25,106 @@ function FollowUpPill({ iso, lastContacted }: { iso?: string; lastContacted?: st
   return <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${tone}`}>{r.label}</span>;
 }
 
+type SortKey = "priority" | "business" | "city" | "quality" | "status" | "lastContacted" | "nextFollowUp";
+type SortDir = "asc" | "desc";
+
+const qualityRank: Record<Quality, number> = { High: 3, Medium: 2, Low: 1 };
+const statusRank: Record<LeadStatus, number> = {
+  "Not Called": 0,
+  Called: 1,
+  Voicemail: 2,
+  "Callback Scheduled": 3,
+  "Zoom Booked": 4,
+  Sold: 5,
+  "Not Interested": 6,
+};
+
+function sortLeads(leads: Lead[], key: SortKey, dir: SortDir): Lead[] {
+  const mult = dir === "asc" ? 1 : -1;
+  return [...leads].sort((a, b) => {
+    let cmp = 0;
+    switch (key) {
+      case "priority":
+        cmp = a.priority - b.priority;
+        break;
+      case "business":
+        cmp = a.business.localeCompare(b.business);
+        break;
+      case "city":
+        cmp = a.city.localeCompare(b.city);
+        break;
+      case "quality":
+        cmp = qualityRank[a.quality] - qualityRank[b.quality];
+        break;
+      case "status":
+        cmp = statusRank[a.status] - statusRank[b.status];
+        break;
+      case "lastContacted": {
+        const ad = isValidContactDate(a.lastContacted) ? new Date(a.lastContacted!).getTime() : 0;
+        const bd = isValidContactDate(b.lastContacted) ? new Date(b.lastContacted!).getTime() : 0;
+        cmp = ad - bd;
+        break;
+      }
+      case "nextFollowUp": {
+        const ad = isValidContactDate(a.nextFollowUp) ? new Date(a.nextFollowUp!).getTime() : 0;
+        const bd = isValidContactDate(b.nextFollowUp) ? new Date(b.nextFollowUp!).getTime() : 0;
+        cmp = ad - bd;
+        break;
+      }
+    }
+    if (cmp !== 0) return cmp * mult;
+
+    // Stable secondary ordering: best quality first, untouched statuses first, then priority.
+    if (key !== "quality") {
+      const qcmp = qualityRank[b.quality] - qualityRank[a.quality];
+      if (qcmp !== 0) return qcmp;
+    }
+    if (key !== "status") {
+      const scmp = statusRank[a.status] - statusRank[b.status];
+      if (scmp !== 0) return scmp;
+    }
+    return a.priority - b.priority;
+  });
+}
+
+function SortHeader({
+  label,
+  sortKey,
+  active,
+  dir,
+  onClick,
+}: {
+  label: string;
+  sortKey: SortKey;
+  active: SortKey;
+  dir: SortDir;
+  onClick: (key: SortKey) => void;
+}) {
+  const Icon = dir === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <button
+      onClick={() => onClick(sortKey)}
+      className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+    >
+      {label}
+      {active === sortKey && <Icon className="h-3 w-3" />}
+    </button>
+  );
+}
+
 export function LeadTable({ leads, selected, toggleSelect, toggleAll, onView, onStatusChange, onCall }: Props) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "quality", dir: "desc" });
   const allChecked = leads.length > 0 && leads.every((l) => selected.has(l.id));
+
+  const sorted = useMemo(() => sortLeads(leads, sort.key, sort.dir), [leads, sort.key, sort.dir]);
+
+  const toggleSort = (key: SortKey) => {
+    setSort((prev) => ({
+      key,
+      dir: prev.key === key && prev.dir === "asc" ? "desc" : "asc",
+    }));
+  };
 
   return (
     <div className="rounded-2xl bg-card border border-border shadow-soft overflow-hidden">
@@ -39,21 +136,35 @@ export function LeadTable({ leads, selected, toggleSelect, toggleAll, onView, on
                 <input type="checkbox" checked={allChecked} onChange={toggleAll}
                   className="rounded border-border accent-navy" />
               </th>
-              <th className="py-3 px-2">#</th>
-              <th className="py-3 px-2">Business</th>
-              <th className="py-3 px-2">City</th>
+              <th className="py-3 px-2">
+                <SortHeader label="#" sortKey="priority" active={sort.key} dir={sort.dir} onClick={toggleSort} />
+              </th>
+              <th className="py-3 px-2">
+                <SortHeader label="Business" sortKey="business" active={sort.key} dir={sort.dir} onClick={toggleSort} />
+              </th>
+              <th className="py-3 px-2">
+                <SortHeader label="City" sortKey="city" active={sort.key} dir={sort.dir} onClick={toggleSort} />
+              </th>
               <th className="py-3 px-2">Phone</th>
               <th className="py-3 px-2">Online Presence</th>
               <th className="py-3 px-2">Opportunity</th>
-              <th className="py-3 px-2">Quality</th>
-              <th className="py-3 px-2">Status</th>
-              <th className="py-3 px-2">Last</th>
-              <th className="py-3 px-2">Follow-up</th>
+              <th className="py-3 px-2">
+                <SortHeader label="Quality" sortKey="quality" active={sort.key} dir={sort.dir} onClick={toggleSort} />
+              </th>
+              <th className="py-3 px-2">
+                <SortHeader label="Status" sortKey="status" active={sort.key} dir={sort.dir} onClick={toggleSort} />
+              </th>
+              <th className="py-3 px-2">
+                <SortHeader label="Last" sortKey="lastContacted" active={sort.key} dir={sort.dir} onClick={toggleSort} />
+              </th>
+              <th className="py-3 px-2">
+                <SortHeader label="Follow-up" sortKey="nextFollowUp" active={sort.key} dir={sort.dir} onClick={toggleSort} />
+              </th>
               <th className="py-3 px-2 pr-4">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {leads.map((l, idx) => (
+            {sorted.map((l, idx) => (
               <tr
                 key={l.id}
                 className={`border-t border-border/60 hover:bg-secondary/40 transition-colors ${
@@ -137,7 +248,7 @@ export function LeadTable({ leads, selected, toggleSelect, toggleAll, onView, on
                 </td>
               </tr>
             ))}
-            {leads.length === 0 && (
+            {sorted.length === 0 && (
               <tr><td colSpan={12} className="text-center py-12 text-muted-foreground">
                 No leads match these filters. Try clearing a chip.
               </td></tr>

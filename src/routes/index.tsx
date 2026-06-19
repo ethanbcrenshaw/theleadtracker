@@ -65,7 +65,7 @@ function Dashboard() {
       if (filters.opportunity !== "All" && l.websiteOpportunity !== filters.opportunity) return false;
       if (filters.source !== "All" && !l.sources.includes(filters.source)) return false;
       return true;
-    }).sort((a, b) => a.priority - b.priority);
+    });
   }, [leads, search, filters]);
 
   const toggleSelect = (id: string) => {
