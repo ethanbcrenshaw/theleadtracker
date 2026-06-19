@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Search, Sparkles, Download, Plus, Table2, Columns3, CalendarClock, Target } from "lucide-react";
+import { Search, Sparkles, Download, Plus, Table2, Columns3, CalendarClock, Target, Phone } from "lucide-react";
 import { useLeads } from "@/lib/store";
 import { exportCSV } from "@/lib/crm-utils";
 import { StatsCards } from "@/components/crm/StatsCards";
@@ -10,6 +10,7 @@ import { LeadDetail } from "@/components/crm/LeadDetail";
 import { KanbanView } from "@/components/crm/KanbanView";
 import { FollowUpView } from "@/components/crm/FollowUpView";
 import { OpportunitiesView } from "@/components/crm/OpportunitiesView";
+import { QueueView } from "@/components/crm/QueueView";
 import { AIGenerateModal } from "@/components/crm/AIGenerateModal";
 import { BulkBar } from "@/components/crm/BulkBar";
 import { CallAssistant } from "@/components/crm/CallAssistant";
@@ -32,7 +33,7 @@ export const Route = createFileRoute("/")({
   component: Dashboard,
 });
 
-type View = "table" | "kanban" | "followup" | "opportunities";
+type View = "queue" | "table" | "kanban" | "followup" | "opportunities";
 
 function Dashboard() {
   const leads = useLeads((s) => s.leads);
@@ -41,7 +42,7 @@ function Dashboard() {
   const bulkDelete = useLeads((s) => s.bulkDelete);
 
   const [search, setSearch] = useState("");
-  const [view, setView] = useState<View>("table");
+  const [view, setView] = useState<View>("queue");
   const [active, setActive] = useState<Lead | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
   const [callLead, setCallLead] = useState<Lead | null>(null);
@@ -82,6 +83,7 @@ function Dashboard() {
   };
 
   const tabs: { id: View; label: string; icon: typeof Table2 }[] = [
+    { id: "queue", label: "Queue", icon: Phone },
     { id: "table", label: "Table", icon: Table2 },
     { id: "kanban", label: "Kanban", icon: Columns3 },
     { id: "followup", label: "Follow-Up", icon: CalendarClock },
@@ -161,6 +163,9 @@ function Dashboard() {
           </div>
         </div>
 
+        {view === "queue" && (
+          <QueueView leads={filtered} onStartCall={setCallLead} />
+        )}
         {view === "table" && (
           <LeadTable
             leads={filtered}

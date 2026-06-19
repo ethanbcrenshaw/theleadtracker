@@ -1,4 +1,4 @@
-import { X, Phone, MapPin, Calendar, Sparkles, Plus, ExternalLink, User, Mic, Video } from "lucide-react";
+import { X, Phone, MapPin, Calendar, Sparkles, Plus, ExternalLink, User, Mic, Video, ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Lead, LeadStatus } from "@/lib/types";
@@ -10,6 +10,8 @@ interface Props {
   lead: Lead | null;
   onClose: () => void;
   onStartCall?: (lead: Lead) => void;
+  inline?: boolean;
+  backLabel?: string;
 }
 
 const QUICK_ACTIONS: { label: string; status: LeadStatus; tone: string }[] = [
@@ -21,7 +23,7 @@ const QUICK_ACTIONS: { label: string; status: LeadStatus; tone: string }[] = [
   { label: "Not Interested", status: "Not Interested", tone: "bg-clay/20 text-clay" },
 ];
 
-export function LeadDetail({ lead, onClose, onStartCall }: Props) {
+export function LeadDetail({ lead, onClose, onStartCall, inline, backLabel }: Props) {
   const setStatus = useLeads((s) => s.setStatus);
   const addNote = useLeads((s) => s.addNote);
   const updateLead = useLeads((s) => s.updateLead);
@@ -32,6 +34,46 @@ export function LeadDetail({ lead, onClose, onStartCall }: Props) {
     setNote("");
     setFollowUp(lead?.nextFollowUp ? lead.nextFollowUp.slice(0, 10) : "");
   }, [lead?.id]);
+
+  if (inline) {
+    if (!lead) {
+      return (
+        <div className="h-full grid place-items-center text-sm text-muted-foreground italic p-8 text-center">
+          Select a lead from the list to see details.
+        </div>
+      );
+    }
+    return (
+      <div className="h-full overflow-y-auto">
+        <div className="sticky top-0 bg-background/90 backdrop-blur border-b border-border px-6 py-4 flex items-center justify-between z-10">
+          <div className="flex items-center gap-2 min-w-0">
+            {backLabel && (
+              <button
+                onClick={onClose}
+                className="lg:hidden inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-secondary text-sm text-foreground"
+              >
+                <ArrowLeft className="h-4 w-4" /> {backLabel}
+              </button>
+            )}
+            <span className="text-xs uppercase tracking-wider text-muted-foreground">
+              Lead #{lead.priority}
+            </span>
+          </div>
+        </div>
+        <DetailBody
+          lead={lead}
+          onStartCall={onStartCall}
+          setStatus={setStatus}
+          updateLead={updateLead}
+          addNote={addNote}
+          note={note}
+          setNote={setNote}
+          followUp={followUp}
+          setFollowUp={setFollowUp}
+        />
+      </div>
+    );
+  }
 
   return (
     <AnimatePresence>
@@ -53,8 +95,47 @@ export function LeadDetail({ lead, onClose, onStartCall }: Props) {
                 <X className="h-4 w-4" />
               </button>
             </div>
+            <DetailBody
+              lead={lead}
+              onStartCall={onStartCall}
+              setStatus={setStatus}
+              updateLead={updateLead}
+              addNote={addNote}
+              note={note}
+              setNote={setNote}
+              followUp={followUp}
+              setFollowUp={setFollowUp}
+            />
+          </motion.aside>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
 
-            <div className="p-6 space-y-6">
+function DetailBody({
+  lead,
+  onStartCall,
+  setStatus,
+  updateLead,
+  addNote,
+  note,
+  setNote,
+  followUp,
+  setFollowUp,
+}: {
+  lead: Lead;
+  onStartCall?: (lead: Lead) => void;
+  setStatus: (id: string, s: LeadStatus) => void;
+  updateLead: (id: string, patch: Partial<Lead>) => void;
+  addNote: (id: string, note: string) => void;
+  note: string;
+  setNote: (v: string) => void;
+  followUp: string;
+  setFollowUp: (v: string) => void;
+}) {
+  return (
+    <div className="p-6 space-y-6">
               <div>
                 <h2 className="font-display text-3xl font-medium text-foreground">{lead.business}</h2>
                 {lead.ownerNote && (
@@ -278,10 +359,6 @@ export function LeadDetail({ lead, onClose, onStartCall }: Props) {
                   </div>
                 </div>
               )}
-            </div>
-          </motion.aside>
-        </>
-      )}
-    </AnimatePresence>
+    </div>
   );
 }
