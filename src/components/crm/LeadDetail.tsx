@@ -1,9 +1,9 @@
-import { X, Phone, MapPin, Calendar, Sparkles, ExternalLink, User, Mic, Video, ArrowLeft, PhoneCall, Voicemail, CalendarClock, CheckCircle2, XCircle } from "lucide-react";
+import { X, MapPin, Calendar, Sparkles, ExternalLink, User, Mic, Video, ArrowLeft, PhoneCall, Voicemail, CalendarClock, CheckCircle2, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Lead, LeadStatus, WebsiteOpportunity } from "@/lib/types";
 import { useLeads } from "@/lib/store";
-import { QualityBadge, StatusBadge } from "./Badges";
+import { StatusBadge } from "./Badges";
 import { formatDate, pitchAngle, sourceLinks, qualityFromOpportunity } from "@/lib/crm-utils";
 
 interface Props {
