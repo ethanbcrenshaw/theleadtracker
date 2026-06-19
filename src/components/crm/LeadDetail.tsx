@@ -211,17 +211,6 @@ function DetailBody({
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
-                <a href={`tel:${lead.phone}`} className="rounded-xl bg-secondary border border-border p-3 hover:bg-tan/15 transition-colors">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground"><Phone className="h-3.5 w-3.5" />Phone</div>
-                  <div className="font-mono text-sm text-navy mt-1">{lead.phone}</div>
-                </a>
-                <div className="rounded-xl bg-secondary border border-border p-3">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground"><MapPin className="h-3.5 w-3.5" />Location</div>
-                  <div className="text-sm mt-1">{lead.city}, {lead.state}</div>
-                </div>
-              </div>
-
               <div className="rounded-xl bg-card border border-border p-4">
                 <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Online Presence</div>
                 <p className="text-sm text-foreground/90">{lead.onlinePresence}</p>
@@ -258,34 +247,9 @@ function DetailBody({
                 </div>
               </div>
 
-              <div className="rounded-xl bg-gradient-to-br from-tan/20 to-gold/15 border border-tan/40 p-4">
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-tan-foreground mb-2">
-                  <Sparkles className="h-3.5 w-3.5" /> Website Pitch Angle
-                </div>
-                <p className="text-sm text-foreground/90 leading-relaxed">{pitchAngle(lead)}</p>
-                <div className="mt-2 text-[11px] text-muted-foreground italic">
-                  Opportunity: {lead.websiteOpportunity}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Quick Actions</div>
-                <div className="grid grid-cols-2 gap-2">
-                  {QUICK_ACTIONS.map((a) => (
-                    <button
-                      key={a.status}
-                      onClick={() => setStatus(lead.id, a.status)}
-                      className={`px-3 py-2 rounded-xl text-xs font-medium ${a.tone} hover:opacity-90 transition-opacity`}
-                    >
-                      {a.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Next Follow-Up</div>
+                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Manual Follow-Up Override</div>
                 </div>
                 <div className="flex gap-2">
                   <input
@@ -299,30 +263,6 @@ function DetailBody({
                     className="px-3 py-2 rounded-xl bg-navy text-navy-foreground text-xs font-medium hover:opacity-90"
                   >
                     Save
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Notes</div>
-                {lead.notes && (
-                  <div className="rounded-xl bg-secondary border border-border p-3 text-sm whitespace-pre-wrap mb-2">
-                    {lead.notes}
-                  </div>
-                )}
-                <div className="flex gap-2">
-                  <textarea
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    placeholder="Add a note…"
-                    rows={2}
-                    className="flex-1 px-3 py-2 rounded-xl bg-card border border-border text-sm resize-none"
-                  />
-                  <button
-                    onClick={() => { if (note.trim()) { addNote(lead.id, note); setNote(""); } }}
-                    className="px-3 rounded-xl bg-navy text-navy-foreground hover:opacity-90"
-                  >
-                    <Plus className="h-4 w-4" />
                   </button>
                 </div>
               </div>
