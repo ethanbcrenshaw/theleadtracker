@@ -1,5 +1,6 @@
 import { Phone, PhoneOff, Video, Trophy, Flame, CalendarClock, Users } from "lucide-react";
 import type { Lead } from "@/lib/types";
+import { isValidContactDate } from "@/lib/crm-utils";
 
 interface Props { leads: Lead[] }
 
@@ -11,7 +12,10 @@ export function StatsCards({ leads }: Props) {
   const sold = leads.filter((l) => l.status === "Sold").length;
   const high = leads.filter((l) => l.quality === "High").length;
   const followups = leads.filter(
-    (l) => l.nextFollowUp && new Date(l.nextFollowUp).getTime() - Date.now() < 7 * 86400000
+    (l) =>
+      isValidContactDate(l.nextFollowUp) &&
+      isValidContactDate(l.lastContacted) &&
+      new Date(l.nextFollowUp!).getTime() - Date.now() < 7 * 86400000
   ).length;
 
   const cards = [
