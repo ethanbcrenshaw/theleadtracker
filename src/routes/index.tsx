@@ -38,7 +38,6 @@ function Dashboard() {
   const leads = useLeads((s) => s.leads);
   const setStatus = useLeads((s) => s.setStatus);
   const bulkSetStatus = useLeads((s) => s.bulkSetStatus);
-  const bulkSetQuality = useLeads((s) => s.bulkSetQuality);
   const bulkDelete = useLeads((s) => s.bulkDelete);
 
   const [search, setSearch] = useState("");
@@ -189,7 +188,6 @@ function Dashboard() {
         count={selected.size}
         onClear={() => setSelected(new Set())}
         onStatus={(s) => { bulkSetStatus(Array.from(selected), s); setSelected(new Set()); }}
-        onQuality={(q) => { bulkSetQuality(Array.from(selected), q); setSelected(new Set()); }}
         onDelete={() => { if (confirm(`Delete ${selected.size} leads?`)) { bulkDelete(Array.from(selected)); setSelected(new Set()); } }}
         onExport={() => { exportCSV(leads.filter((l) => selected.has(l.id))); }}
       />
