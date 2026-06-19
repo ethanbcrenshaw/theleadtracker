@@ -1,16 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Search, Sparkles, Download, Plus, Table2, Columns3, CalendarClock, Target, Phone } from "lucide-react";
+import { Search, Sparkles, Download, Plus } from "lucide-react";
 import { useLeads } from "@/lib/store";
-import { exportCSV } from "@/lib/crm-utils";
+import { exportCSV, isValidContactDate } from "@/lib/crm-utils";
 import { StatsCards } from "@/components/crm/StatsCards";
 import { Filters, type FilterState } from "@/components/crm/Filters";
-import { LeadTable } from "@/components/crm/LeadTable";
+import { LeadTable, qualityRank, statusRank } from "@/components/crm/LeadTable";
 import { LeadDetail } from "@/components/crm/LeadDetail";
-import { KanbanView } from "@/components/crm/KanbanView";
-import { FollowUpView } from "@/components/crm/FollowUpView";
-import { OpportunitiesView } from "@/components/crm/OpportunitiesView";
 import { QueueView } from "@/components/crm/QueueView";
+import { SavedViewPills, type SavedView } from "@/components/crm/SavedViewPills";
+import { AnalyticsView } from "@/components/crm/AnalyticsView";
 import { AIGenerateModal } from "@/components/crm/AIGenerateModal";
 import { BulkBar } from "@/components/crm/BulkBar";
 import { CallAssistant } from "@/components/crm/CallAssistant";
@@ -33,8 +32,6 @@ export const Route = createFileRoute("/")({
   component: Dashboard,
 });
 
-type View = "queue" | "table" | "kanban" | "followup" | "opportunities";
-
 function Dashboard() {
   const leads = useLeads((s) => s.leads);
   const setStatus = useLeads((s) => s.setStatus);
@@ -42,7 +39,7 @@ function Dashboard() {
   const bulkDelete = useLeads((s) => s.bulkDelete);
 
   const [search, setSearch] = useState("");
-  const [view, setView] = useState<View>("queue");
+  const [view, setView] = useState<SavedView>("hot");
   const [active, setActive] = useState<Lead | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
   const [callLead, setCallLead] = useState<Lead | null>(null);
@@ -56,18 +53,88 @@ function Dashboard() {
     [leads]
   );
 
-  const filtered = useMemo(() => {
+  // Apply search by business or city only (per spec)
+  const searched = useMemo(() => {
     const q = search.toLowerCase().trim();
-    return leads.filter((l) => {
-      if (q && !`${l.business} ${l.city} ${l.phone} ${l.notes}`.toLowerCase().includes(q)) return false;
+    if (!q) return leads;
+    return leads.filter((l) => `${l.business} ${l.city}`.toLowerCase().includes(q));
+  }, [leads, search]);
+
+  const endOfToday = useMemo(() => {
+    const d = new Date();
+    d.setHours(23, 59, 59, 999);
+    return d.getTime();
+  }, []);
+
+  // "Hot, not called": High quality + status Not Called.
+  // Sort by quality desc, then never-contacted first, then priority.
+  const hotLeads = useMemo(() => {
+    return [...searched]
+      .filter((l) => l.quality === "High" && l.status === "Not Called")
+      .sort((a, b) => {
+        const q = qualityRank[b.quality] - qualityRank[a.quality];
+        if (q !== 0) return q;
+        const aContacted = isValidContactDate(a.lastContacted) ? 1 : 0;
+        const bContacted = isValidContactDate(b.lastContacted) ? 1 : 0;
+        if (aContacted !== bContacted) return aContacted - bContacted;
+        return a.priority - b.priority;
+      });
+  }, [searched]);
+
+  // "Follow-ups due": follow-up valid and today-or-earlier. Most overdue first.
+  const followupLeads = useMemo(() => {
+    return [...searched]
+      .filter(
+        (l) =>
+          isValidContactDate(l.nextFollowUp) &&
+          new Date(l.nextFollowUp!).getTime() <= endOfToday
+      )
+      .sort(
+        (a, b) =>
+          new Date(a.nextFollowUp!).getTime() - new Date(b.nextFollowUp!).getTime()
+      );
+  }, [searched, endOfToday]);
+
+  // "Pipeline": active outreach in progress. Sort by nextFollowUp asc, nulls last.
+  const pipelineLeads = useMemo(() => {
+    const inPipeline = (s: Lead["status"]) =>
+      s === "Called" || s === "Callback Scheduled" || s === "Zoom Booked";
+    return [...searched]
+      .filter((l) => inPipeline(l.status))
+      .sort((a, b) => {
+        const ad = isValidContactDate(a.nextFollowUp)
+          ? new Date(a.nextFollowUp!).getTime()
+          : Number.POSITIVE_INFINITY;
+        const bd = isValidContactDate(b.nextFollowUp)
+          ? new Date(b.nextFollowUp!).getTime()
+          : Number.POSITIVE_INFINITY;
+        if (ad !== bd) return ad - bd;
+        return statusRank[a.status] - statusRank[b.status];
+      });
+  }, [searched]);
+
+  // "All leads" honors the existing dropdown filters on top of the search.
+  const allFiltered = useMemo(() => {
+    return searched.filter((l) => {
       if (filters.city !== "All" && l.city !== filters.city) return false;
       if (filters.quality !== "All" && l.quality !== filters.quality) return false;
       if (filters.status !== "All" && l.status !== filters.status) return false;
-      if (filters.opportunity !== "All" && l.websiteOpportunity !== filters.opportunity) return false;
+      if (filters.opportunity !== "All" && l.websiteOpportunity !== filters.opportunity)
+        return false;
       if (filters.source !== "All" && !l.sources.includes(filters.source)) return false;
       return true;
     });
-  }, [leads, search, filters]);
+  }, [searched, filters]);
+
+  const counts = {
+    hot: hotLeads.length,
+    followups: followupLeads.length,
+    pipeline: pipelineLeads.length,
+    all: allFiltered.length,
+  };
+
+  // What's used by bulk actions (only meaningful in the "all" table view).
+  const tableLeads = allFiltered;
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -78,17 +145,9 @@ function Dashboard() {
   };
   const toggleAll = () => {
     setSelected((prev) =>
-      filtered.every((l) => prev.has(l.id)) ? new Set() : new Set(filtered.map((l) => l.id))
+      tableLeads.every((l) => prev.has(l.id)) ? new Set() : new Set(tableLeads.map((l) => l.id))
     );
   };
-
-  const tabs: { id: View; label: string; icon: typeof Table2 }[] = [
-    { id: "queue", label: "Queue", icon: Phone },
-    { id: "table", label: "Table", icon: Table2 },
-    { id: "kanban", label: "Kanban", icon: Columns3 },
-    { id: "followup", label: "Follow-Up", icon: CalendarClock },
-    { id: "opportunities", label: "Opportunities", icon: Target },
-  ];
 
   return (
     <div className="min-h-screen bg-background">
@@ -110,20 +169,11 @@ function Dashboard() {
               </p>
             </div>
             <div className="flex items-center gap-3 flex-wrap">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search business, city, phone…"
-                  className="pl-9 pr-3 py-2 rounded-xl bg-card border border-border text-sm w-72 focus:outline-none focus:ring-2 focus:ring-ring/40"
-                />
-              </div>
               <button onClick={() => setAiOpen(true)}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-br from-navy to-[oklch(0.30_0.08_265)] text-navy-foreground text-sm font-medium shadow-soft hover:shadow-elev transition-shadow">
                 <Sparkles className="h-4 w-4" /> Generate Leads with AI
               </button>
-              <button onClick={() => exportCSV(filtered)}
+              <button onClick={() => exportCSV(allFiltered)}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-card border border-border text-sm font-medium hover:bg-secondary transition-colors">
                 <Download className="h-4 w-4" /> Export CSV
               </button>
@@ -139,36 +189,72 @@ function Dashboard() {
 
       <main className="max-w-[1500px] mx-auto px-8 py-10 space-y-8">
         <StatsCards leads={leads} />
-        <Filters filters={filters} setFilters={setFilters} cities={cities} />
 
-        {/* Tabs */}
-        <div className="flex items-center justify-between flex-wrap gap-3 pt-2">
-          <div className="inline-flex p-1 rounded-2xl bg-card border border-border shadow-soft">
-            {tabs.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setView(t.id)}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                  view === t.id
-                    ? "bg-navy text-navy-foreground shadow-soft"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <t.icon className="h-4 w-4" /> {t.label}
-              </button>
-            ))}
+        <div className="space-y-4">
+          <SavedViewPills view={view} setView={setView} counts={counts} />
+
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="relative w-full sm:w-80">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search business or city…"
+                className="w-full pl-9 pr-3 py-2 rounded-xl bg-card border border-border text-sm focus:outline-none focus:ring-2 focus:ring-ring/40"
+              />
+            </div>
+            {view !== "analytics" && (
+              <div className="text-xs text-muted-foreground">
+                Showing{" "}
+                <span className="font-medium text-foreground">
+                  {view === "hot"
+                    ? hotLeads.length
+                    : view === "followups"
+                      ? followupLeads.length
+                      : view === "pipeline"
+                        ? pipelineLeads.length
+                        : allFiltered.length}
+                </span>{" "}
+                of {leads.length} leads
+              </div>
+            )}
           </div>
-          <div className="text-xs text-muted-foreground">
-            Showing <span className="font-medium text-foreground">{filtered.length}</span> of {leads.length} leads
-          </div>
+
+          {view === "all" && (
+            <Filters filters={filters} setFilters={setFilters} cities={cities} />
+          )}
         </div>
 
-        {view === "queue" && (
-          <QueueView leads={filtered} onStartCall={setCallLead} />
+        {view === "hot" && (
+          <QueueView
+            leads={hotLeads}
+            presorted
+            title="Hot, not called"
+            emptyMessage="No high-quality leads waiting to be called. Nice work."
+            onStartCall={setCallLead}
+          />
         )}
-        {view === "table" && (
+        {view === "followups" && (
+          <QueueView
+            leads={followupLeads}
+            presorted
+            title="Follow-ups due"
+            emptyMessage="No follow-ups due today. You're caught up."
+            onStartCall={setCallLead}
+          />
+        )}
+        {view === "pipeline" && (
+          <QueueView
+            leads={pipelineLeads}
+            presorted
+            title="Pipeline"
+            emptyMessage="No leads currently in your pipeline."
+            onStartCall={setCallLead}
+          />
+        )}
+        {view === "all" && (
           <LeadTable
-            leads={filtered}
+            leads={allFiltered}
             selected={selected}
             toggleSelect={toggleSelect}
             toggleAll={toggleAll}
@@ -177,9 +263,7 @@ function Dashboard() {
             onCall={setCallLead}
           />
         )}
-        {view === "kanban" && <KanbanView leads={filtered} onView={setActive} />}
-        {view === "followup" && <FollowUpView leads={filtered} onView={setActive} />}
-        {view === "opportunities" && <OpportunitiesView leads={filtered} onView={setActive} />}
+        {view === "analytics" && <AnalyticsView leads={leads} />}
 
         <footer className="text-center text-sm text-muted-foreground py-12 italic font-display">
           Facebook-only businesses are often strong website prospects. Keep going. ✦
