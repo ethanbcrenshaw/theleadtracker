@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { CallRecord, Lead, LeadStatus, Quality } from "./types";
+import type { CallRecord, Lead, LeadStatus } from "./types";
 import { seedLeads } from "@/data/seed";
 import { qualityFromOpportunity } from "./crm-utils";
 
