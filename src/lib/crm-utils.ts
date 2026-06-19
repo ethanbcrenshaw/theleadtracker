@@ -21,6 +21,20 @@ export const OPPORTUNITIES: WebsiteOpportunity[] = [
   "Social-Heavy",
 ];
 
+export function qualityFromOpportunity(op: WebsiteOpportunity): Quality {
+  switch (op) {
+    case "No Dedicated Website":
+    case "Facebook Only":
+    case "Yelp/Directory Only":
+    case "Social-Heavy":
+      return "High";
+    case "Outdated Website":
+      return "Medium";
+    case "Has Website":
+      return "Low";
+  }
+}
+
 export const SOURCES = [
   "Yelp",
   "Facebook",
