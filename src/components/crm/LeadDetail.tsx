@@ -1,10 +1,10 @@
-import { X, Phone, MapPin, Calendar, Sparkles, Plus, ExternalLink, User, Mic, Video, ArrowLeft } from "lucide-react";
+import { X, Phone, MapPin, Calendar, Sparkles, ExternalLink, User, Mic, Video, ArrowLeft, PhoneCall, Voicemail, CalendarClock, CheckCircle2, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import type { Lead, LeadStatus } from "@/lib/types";
+import type { Lead, LeadStatus, WebsiteOpportunity } from "@/lib/types";
 import { useLeads } from "@/lib/store";
 import { QualityBadge, StatusBadge } from "./Badges";
-import { formatDate, pitchAngle, sourceLinks } from "@/lib/crm-utils";
+import { formatDate, pitchAngle, sourceLinks, qualityFromOpportunity } from "@/lib/crm-utils";
 
 interface Props {
   lead: Lead | null;
@@ -14,14 +14,37 @@ interface Props {
   backLabel?: string;
 }
 
-const QUICK_ACTIONS: { label: string; status: LeadStatus; tone: string }[] = [
-  { label: "Mark Called", status: "Called", tone: "bg-navy text-navy-foreground" },
-  { label: "Mark Voicemail", status: "Voicemail", tone: "bg-[oklch(0.75_0.05_300)] text-[oklch(0.25_0.05_300)]" },
-  { label: "Schedule Callback", status: "Callback Scheduled", tone: "bg-gold text-gold-foreground" },
-  { label: "Book Zoom", status: "Zoom Booked", tone: "bg-sage text-sage-foreground" },
-  { label: "Mark Sold", status: "Sold", tone: "bg-[oklch(0.5_0.1_150)] text-white" },
-  { label: "Not Interested", status: "Not Interested", tone: "bg-clay/20 text-clay" },
-];
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+function opportunityShort(op: WebsiteOpportunity): string {
+  switch (op) {
+    case "No Dedicated Website": return "No website";
+    case "Facebook Only": return "Facebook only";
+    case "Yelp/Directory Only": return "Directory only";
+    case "Outdated Website": return "Outdated site";
+    case "Has Website": return "Has website";
+    case "Social-Heavy": return "Social-heavy";
+  }
+}
+
+function opportunityTagColors(op: WebsiteOpportunity): { bg: string; text: string } {
+  const q = qualityFromOpportunity(op);
+  if (q === "High") return { bg: "#FAECE7", text: "#712B13" };
+  if (q === "Medium") return { bg: "#FAEEDA", text: "#633806" };
+  return { bg: "#F1EFE8", text: "#2C2C2A" };
+}
+
+function addDaysISO(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  d.setHours(12, 0, 0, 0);
+  return d.toISOString();
+}
 
 export function LeadDetail({ lead, onClose, onStartCall, inline, backLabel }: Props) {
   const setStatus = useLeads((s) => s.setStatus);
