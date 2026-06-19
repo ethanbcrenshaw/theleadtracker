@@ -1,7 +1,7 @@
 import { Eye, Pencil, ChevronDown, Mic } from "lucide-react";
 import type { Lead, LeadStatus } from "@/lib/types";
 import { QualityBadge, StatusBadge } from "./Badges";
-import { formatDate, relativeFollowUp, STATUSES } from "@/lib/crm-utils";
+import { formatDate, isValidContactDate, relativeFollowUp, STATUSES } from "@/lib/crm-utils";
 import { useState } from "react";
 
 interface Props {
@@ -14,8 +14,8 @@ interface Props {
   onCall?: (lead: Lead) => void;
 }
 
-function FollowUpPill({ iso }: { iso?: string }) {
-  const r = relativeFollowUp(iso);
+function FollowUpPill({ iso, lastContacted }: { iso?: string; lastContacted?: string }) {
+  const r = relativeFollowUp(iso, lastContacted);
   if (!r) return <span className="text-muted-foreground">—</span>;
   const tone =
     r.tone === "overdue" ? "bg-clay/15 text-clay" :
@@ -115,8 +115,10 @@ export function LeadTable({ leads, selected, toggleSelect, toggleAll, onView, on
                     </>
                   )}
                 </td>
-                <td className="py-3 px-2 text-xs text-muted-foreground whitespace-nowrap">{formatDate(l.lastContacted)}</td>
-                <td className="py-3 px-2"><FollowUpPill iso={l.nextFollowUp} /></td>
+                <td className="py-3 px-2 text-xs text-muted-foreground whitespace-nowrap">
+                  {isValidContactDate(l.lastContacted) ? formatDate(l.lastContacted) : <span className="italic text-muted-foreground/70">Never</span>}
+                </td>
+                <td className="py-3 px-2"><FollowUpPill iso={l.nextFollowUp} lastContacted={l.lastContacted} /></td>
                 <td className="py-3 px-2 pr-4">
                   <div className="flex items-center gap-1">
                     {onCall && (

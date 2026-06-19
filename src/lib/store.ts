@@ -3,6 +3,17 @@ import { persist } from "zustand/middleware";
 import type { CallRecord, Lead, LeadStatus, Quality } from "./types";
 import { seedLeads } from "@/data/seed";
 
+function cleanDate(iso?: string): string | undefined {
+  if (!iso) return undefined;
+  const d = new Date(iso);
+  if (isNaN(d.getTime()) || d.getFullYear() < 2000) return undefined;
+  return iso;
+}
+
+function sanitizeLead(l: Lead): Lead {
+  return { ...l, lastContacted: cleanDate(l.lastContacted), nextFollowUp: cleanDate(l.nextFollowUp) };
+}
+
 interface LeadStore {
   leads: Lead[];
   hydrate: () => void;
@@ -75,8 +86,8 @@ export const useLeads = create<LeadStore>()(
         })),
       bulkDelete: (ids) =>
         set((s) => ({ leads: s.leads.filter((l) => !ids.includes(l.id)) })),
-      addLead: (lead) => set((s) => ({ leads: [lead, ...s.leads] })),
-      addLeads: (leads) => set((s) => ({ leads: [...leads, ...s.leads] })),
+      addLead: (lead) => set((s) => ({ leads: [sanitizeLead(lead), ...s.leads] })),
+      addLeads: (leads) => set((s) => ({ leads: [...leads.map(sanitizeLead), ...s.leads] })),
       addCallRecord: (id, record) =>
         set((s) => ({
           leads: s.leads.map((l) =>
@@ -86,6 +97,11 @@ export const useLeads = create<LeadStore>()(
           ),
         })),
     }),
-    { name: "lead-mgmt-v1" }
+    {
+      name: "lead-mgmt-v1",
+      onRehydrateStorage: () => (state) => {
+        if (state) state.leads = state.leads.map(sanitizeLead);
+      },
+    }
   )
 );
