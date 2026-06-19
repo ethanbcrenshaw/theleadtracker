@@ -28,8 +28,8 @@ function FollowUpPill({ iso, lastContacted }: { iso?: string; lastContacted?: st
 type SortKey = "priority" | "business" | "city" | "quality" | "status" | "lastContacted" | "nextFollowUp";
 type SortDir = "asc" | "desc";
 
-const qualityRank: Record<Quality, number> = { High: 3, Medium: 2, Low: 1 };
-const statusRank: Record<LeadStatus, number> = {
+export const qualityRank: Record<Quality, number> = { High: 3, Medium: 2, Low: 1 };
+export const statusRank: Record<LeadStatus, number> = {
   "Not Called": 0,
   Called: 1,
   Voicemail: 2,
@@ -39,7 +39,10 @@ const statusRank: Record<LeadStatus, number> = {
   "Not Interested": 6,
 };
 
-function sortLeads(leads: Lead[], key: SortKey, dir: SortDir): Lead[] {
+export type LeadSortKey = SortKey;
+export type LeadSortDir = SortDir;
+
+export function sortLeads(leads: Lead[], key: SortKey, dir: SortDir): Lead[] {
   const mult = dir === "asc" ? 1 : -1;
   return [...leads].sort((a, b) => {
     let cmp = 0;
