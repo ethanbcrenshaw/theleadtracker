@@ -159,31 +159,21 @@ function DetailBody({
 }) {
   return (
     <div className="p-6 space-y-6">
-              <div>
-                <h2 className="font-display text-3xl font-medium text-foreground">{lead.business}</h2>
-                {lead.ownerNote && (
-                  <span className="inline-block mt-1 px-2 py-0.5 rounded-full bg-tan/30 text-tan-foreground text-[11px] font-medium">
-                    {lead.ownerNote}
-                  </span>
-                )}
-                <div className="flex items-center gap-3 mt-3">
-                  <QualityBadge q={lead.quality} />
-                  <StatusBadge s={lead.status} />
-                  {lead.zoomBooked && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-maroon text-maroon-foreground text-[11px] font-medium">
-                      <Video className="h-3 w-3" /> Zoom {lead.zoomDate ? formatDate(lead.zoomDate) : "booked"}
-                    </span>
-                  )}
-                </div>
-                {onStartCall && (
-                  <button
-                    onClick={() => onStartCall(lead)}
-                    className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-maroon text-maroon-foreground text-sm font-medium hover:opacity-90 shadow-soft"
-                  >
-                    <Mic className="h-4 w-4" /> Start Call Assistant
-                  </button>
-                )}
-              </div>
+              <LeadHero
+                lead={lead}
+                onStartCall={onStartCall}
+              />
+              <OutcomeActions
+                lead={lead}
+                setStatus={setStatus}
+                updateLead={updateLead}
+              />
+              <NotesBlock
+                lead={lead}
+                note={note}
+                setNote={setNote}
+                addNote={addNote}
+              />
 
               {(lead.aiSummary || lead.aiNextAction) && (
                 <div className="rounded-2xl bg-gradient-to-br from-navy/[0.05] to-maroon/[0.05] border border-navy/15 p-4">
