@@ -87,15 +87,30 @@ function sortLeads(leads: Lead[], key: SortKey, dir: SortDir): Lead[] {
   });
 }
 
-const sortableHeaders: { key: SortKey; label: string }[] = [
-  { key: "priority", label: "#" },
-  { key: "business", label: "Business" },
-  { key: "city", label: "City" },
-  { key: "quality", label: "Quality" },
-  { key: "status", label: "Status" },
-  { key: "lastContacted", label: "Last" },
-  { key: "nextFollowUp", label: "Follow-up" },
-];
+function SortHeader({
+  label,
+  sortKey,
+  active,
+  dir,
+  onClick,
+}: {
+  label: string;
+  sortKey: SortKey;
+  active: SortKey;
+  dir: SortDir;
+  onClick: (key: SortKey) => void;
+}) {
+  const Icon = dir === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <button
+      onClick={() => onClick(sortKey)}
+      className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+    >
+      {label}
+      {active === sortKey && <Icon className="h-3 w-3" />}
+    </button>
+  );
+}
 
 export function LeadTable({ leads, selected, toggleSelect, toggleAll, onView, onStatusChange, onCall }: Props) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
@@ -111,8 +126,6 @@ export function LeadTable({ leads, selected, toggleSelect, toggleAll, onView, on
     }));
   };
 
-  const SortIcon = sort.dir === "asc" ? ArrowUp : ArrowDown;
-
   return (
     <div className="rounded-2xl bg-card border border-border shadow-soft overflow-hidden">
       <div className="overflow-x-auto">
@@ -123,19 +136,30 @@ export function LeadTable({ leads, selected, toggleSelect, toggleAll, onView, on
                 <input type="checkbox" checked={allChecked} onChange={toggleAll}
                   className="rounded border-border accent-navy" />
               </th>
-              {sortableHeaders.map(({ key, label }) => (
-                <th key={key} className="py-3 px-2">
-                  <button
-                    onClick={() => toggleSort(key)}
-                    className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
-                  >
-                    {label}
-                    {sort.key === key && <SortIcon className="h-3 w-3" />}
-                  </button>
-                </th>
-              ))}
+              <th className="py-3 px-2">
+                <SortHeader label="#" sortKey="priority" active={sort.key} dir={sort.dir} onClick={toggleSort} />
+              </th>
+              <th className="py-3 px-2">
+                <SortHeader label="Business" sortKey="business" active={sort.key} dir={sort.dir} onClick={toggleSort} />
+              </th>
+              <th className="py-3 px-2">
+                <SortHeader label="City" sortKey="city" active={sort.key} dir={sort.dir} onClick={toggleSort} />
+              </th>
+              <th className="py-3 px-2">Phone</th>
               <th className="py-3 px-2">Online Presence</th>
               <th className="py-3 px-2">Opportunity</th>
+              <th className="py-3 px-2">
+                <SortHeader label="Quality" sortKey="quality" active={sort.key} dir={sort.dir} onClick={toggleSort} />
+              </th>
+              <th className="py-3 px-2">
+                <SortHeader label="Status" sortKey="status" active={sort.key} dir={sort.dir} onClick={toggleSort} />
+              </th>
+              <th className="py-3 px-2">
+                <SortHeader label="Last" sortKey="lastContacted" active={sort.key} dir={sort.dir} onClick={toggleSort} />
+              </th>
+              <th className="py-3 px-2">
+                <SortHeader label="Follow-up" sortKey="nextFollowUp" active={sort.key} dir={sort.dir} onClick={toggleSort} />
+              </th>
               <th className="py-3 px-2 pr-4">Actions</th>
             </tr>
           </thead>
@@ -170,6 +194,12 @@ export function LeadTable({ leads, selected, toggleSelect, toggleAll, onView, on
                 <td className="py-3 px-2">
                   <a href={`tel:${l.phone}`} className="text-navy hover:underline font-mono text-xs">{l.phone}</a>
                 </td>
+                <td className="py-3 px-2 max-w-[260px]">
+                  <span className="text-xs text-muted-foreground line-clamp-2">{l.onlinePresence}</span>
+                </td>
+                <td className="py-3 px-2">
+                  <span className="text-[11px] text-foreground/80">{l.websiteOpportunity}</span>
+                </td>
                 <td className="py-3 px-2"><QualityBadge q={l.quality} /></td>
                 <td className="py-3 px-2 relative">
                   <button
@@ -200,12 +230,6 @@ export function LeadTable({ leads, selected, toggleSelect, toggleAll, onView, on
                   {isValidContactDate(l.lastContacted) ? formatDate(l.lastContacted) : <span className="italic text-muted-foreground/70">Never</span>}
                 </td>
                 <td className="py-3 px-2"><FollowUpPill iso={l.nextFollowUp} lastContacted={l.lastContacted} /></td>
-                <td className="py-3 px-2 max-w-[260px]">
-                  <span className="text-xs text-muted-foreground line-clamp-2">{l.onlinePresence}</span>
-                </td>
-                <td className="py-3 px-2">
-                  <span className="text-[11px] text-foreground/80">{l.websiteOpportunity}</span>
-                </td>
                 <td className="py-3 px-2 pr-4">
                   <div className="flex items-center gap-1">
                     {onCall && (
