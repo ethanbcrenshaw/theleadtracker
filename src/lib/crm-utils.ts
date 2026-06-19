@@ -104,13 +104,26 @@ export function exportCSV(leads: Lead[]) {
 export function formatDate(iso?: string) {
   if (!iso) return "—";
   const d = new Date(iso);
+  if (isNaN(d.getTime()) || d.getFullYear() < 2000) return "—";
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
-export function relativeFollowUp(iso?: string) {
-  if (!iso) return null;
-  const days = Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000);
-  if (days < 0) return { label: `${Math.abs(days)}d overdue`, tone: "overdue" as const };
+export function isValidContactDate(iso?: string): boolean {
+  if (!iso) return false;
+  const d = new Date(iso);
+  return !isNaN(d.getTime()) && d.getFullYear() >= 2000;
+}
+
+export function relativeFollowUp(nextFollowUp?: string, lastContacted?: string) {
+  if (!isValidContactDate(nextFollowUp)) return null;
+  const days = Math.ceil((new Date(nextFollowUp!).getTime() - Date.now()) / 86400000);
+  if (days < 0) {
+    // Only flag as overdue when we actually have a prior contact to be overdue from.
+    if (!isValidContactDate(lastContacted)) {
+      return { label: "Scheduled", tone: "later" as const };
+    }
+    return { label: `${Math.abs(days)}d overdue`, tone: "overdue" as const };
+  }
   if (days === 0) return { label: "Today", tone: "today" as const };
   if (days <= 3) return { label: `In ${days}d`, tone: "soon" as const };
   return { label: `In ${days}d`, tone: "later" as const };
