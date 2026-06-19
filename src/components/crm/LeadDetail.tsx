@@ -359,10 +359,6 @@ function DetailBody({
                   </div>
                 </div>
               )}
-            </div>
-          </motion.aside>
-        </>
-      )}
-    </AnimatePresence>
+    </div>
   );
 }
