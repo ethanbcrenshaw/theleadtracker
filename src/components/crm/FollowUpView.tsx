@@ -1,5 +1,5 @@
 import type { Lead } from "@/lib/types";
-import { formatDate, relativeFollowUp } from "@/lib/crm-utils";
+import { formatDate, isValidContactDate, relativeFollowUp } from "@/lib/crm-utils";
 import { QualityBadge, StatusBadge } from "./Badges";
 import { Phone } from "lucide-react";
 
@@ -20,7 +20,7 @@ export function FollowUpView({ leads, onView }: { leads: Lead[]; onView: (l: Lea
     <div className="space-y-2">
       <p className="text-sm text-muted-foreground italic px-1">Follow up before the lead goes cold.</p>
       {withFollowup.map((l) => {
-        const r = relativeFollowUp(l.nextFollowUp);
+        const r = relativeFollowUp(l.nextFollowUp, l.lastContacted);
         const tone = r?.tone === "overdue" ? "border-clay/50" : r?.tone === "today" ? "border-gold/50" : "border-border";
         return (
           <button
@@ -35,7 +35,7 @@ export function FollowUpView({ leads, onView }: { leads: Lead[]; onView: (l: Lea
                 <StatusBadge s={l.status} />
               </div>
               <div className="text-xs text-muted-foreground mt-1">
-                {l.city}, {l.state} · Last: {formatDate(l.lastContacted)}
+                {l.city}, {l.state} · Last: {isValidContactDate(l.lastContacted) ? formatDate(l.lastContacted) : "Never"}
               </div>
               {l.notes && <p className="text-xs text-foreground/70 mt-1 line-clamp-1">{l.notes}</p>}
             </div>
