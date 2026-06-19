@@ -8,6 +8,9 @@ import { qualityFromOpportunity } from "@/lib/crm-utils";
 interface Props {
   leads: Lead[];
   onStartCall?: (lead: Lead) => void;
+  presorted?: boolean;
+  emptyMessage?: string;
+  title?: string;
 }
 
 function opportunityLabel(op: WebsiteOpportunity): string {
@@ -47,8 +50,11 @@ function OpportunityTag({ op }: { op: WebsiteOpportunity }) {
   );
 }
 
-export function QueueView({ leads, onStartCall }: Props) {
-  const sorted = useMemo(() => sortLeads(leads, "priority", "asc"), [leads]);
+export function QueueView({ leads, onStartCall, presorted, emptyMessage, title }: Props) {
+  const sorted = useMemo(
+    () => (presorted ? leads : sortLeads(leads, "priority", "asc")),
+    [leads, presorted]
+  );
   const [activeId, setActiveId] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -80,7 +86,7 @@ export function QueueView({ leads, onStartCall }: Props) {
           }`}
         >
           <div className="px-4 py-3 border-b border-border bg-secondary/40 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-            Call Queue · {sorted.length}
+            {title ?? "Call Queue"} · {sorted.length}
           </div>
           <ul className="divide-y divide-border max-h-[75vh] overflow-y-auto">
             {sorted.map((l) => {
@@ -123,7 +129,7 @@ export function QueueView({ leads, onStartCall }: Props) {
             })}
             {sorted.length === 0 && (
               <li className="px-4 py-10 text-center text-sm text-muted-foreground italic">
-                No leads match your filters.
+                {emptyMessage ?? "No leads match your filters."}
               </li>
             )}
           </ul>
