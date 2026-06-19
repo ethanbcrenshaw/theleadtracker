@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Mic, Phone, ChevronRight } from "lucide-react";
-import type { Lead, Quality, WebsiteOpportunity } from "@/lib/types";
+import type { Lead, WebsiteOpportunity } from "@/lib/types";
 import { LeadDetail } from "./LeadDetail";
 import { sortLeads } from "./LeadTable";
 import { qualityFromOpportunity } from "@/lib/crm-utils";
