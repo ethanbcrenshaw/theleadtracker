@@ -14,7 +14,90 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      leads: {
+        Row: {
+          aiNextAction: string | null
+          aiSummary: string | null
+          business: string
+          callRecords: Json | null
+          city: string
+          created_at: string
+          history: Json
+          id: string
+          lastContacted: string | null
+          nextFollowUp: string | null
+          notes: string
+          onlinePresence: string
+          owner: string | null
+          ownerNote: string | null
+          ownerSource: string | null
+          phone: string
+          priority: number
+          quality: string
+          sources: Json
+          state: string
+          status: string
+          tags: Json
+          websiteOpportunity: string
+          zoomBooked: boolean | null
+          zoomDate: string | null
+        }
+        Insert: {
+          aiNextAction?: string | null
+          aiSummary?: string | null
+          business?: string
+          callRecords?: Json | null
+          city?: string
+          created_at?: string
+          history?: Json
+          id: string
+          lastContacted?: string | null
+          nextFollowUp?: string | null
+          notes?: string
+          onlinePresence?: string
+          owner?: string | null
+          ownerNote?: string | null
+          ownerSource?: string | null
+          phone?: string
+          priority?: number
+          quality?: string
+          sources?: Json
+          state?: string
+          status?: string
+          tags?: Json
+          websiteOpportunity?: string
+          zoomBooked?: boolean | null
+          zoomDate?: string | null
+        }
+        Update: {
+          aiNextAction?: string | null
+          aiSummary?: string | null
+          business?: string
+          callRecords?: Json | null
+          city?: string
+          created_at?: string
+          history?: Json
+          id?: string
+          lastContacted?: string | null
+          nextFollowUp?: string | null
+          notes?: string
+          onlinePresence?: string
+          owner?: string | null
+          ownerNote?: string | null
+          ownerSource?: string | null
+          phone?: string
+          priority?: number
+          quality?: string
+          sources?: Json
+          state?: string
+          status?: string
+          tags?: Json
+          websiteOpportunity?: string
+          zoomBooked?: boolean | null
+          zoomDate?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
