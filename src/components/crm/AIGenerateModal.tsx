@@ -13,6 +13,12 @@ const ALLOWED_OPP: WebsiteOpportunity[] = [
   "No Dedicated Website","Facebook Only","Yelp/Directory Only","Outdated Website","Has Website","Social-Heavy",
 ];
 
+function qualityFor(opp: WebsiteOpportunity): "High" | "Medium" | "Low" {
+  if (opp === "Has Website") return "Low";
+  if (opp === "Outdated Website") return "Medium";
+  return "High";
+}
+
 type Candidate = {
   business: string;
   city: string;
@@ -122,7 +128,7 @@ export function AIGenerateModal({ open, onClose }: Props) {
         ownerSource: r.sourceUrl || undefined,
         onlinePresence: r.onlinePresence || "Discovered via web search",
         websiteOpportunity: opp,
-        quality: "High",
+        quality: qualityFor(opp),
         status: "Not Called",
         sources: sources.length ? sources : ["Other"],
         notes: r.sourceUrl ? `Discovered via: ${r.sourceUrl}` : "Discovered via web search.",
