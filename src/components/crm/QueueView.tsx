@@ -32,9 +32,9 @@ function opportunityLabel(op: WebsiteOpportunity): string {
 
 function opportunityTagColors(op: WebsiteOpportunity): { bg: string; text: string } {
   const q = qualityFromOpportunity(op);
-  if (q === "High") return { bg: "#FAECE7", text: "#712B13" };
-  if (q === "Medium") return { bg: "#FAEEDA", text: "#633806" };
-  return { bg: "#F1EFE8", text: "#2C2C2A" };
+  if (q === "High") return { bg: "oklch(0.88 0.05 45)", text: "oklch(0.38 0.12 40)" };
+  if (q === "Medium") return { bg: "oklch(0.90 0.04 80)", text: "oklch(0.40 0.05 55)" };
+  return { bg: "oklch(0.91 0.02 80)", text: "oklch(0.35 0.01 60)" };
 }
 
 function OpportunityTag({ op }: { op: WebsiteOpportunity }) {
