@@ -34,9 +34,9 @@ function opportunityShort(op: WebsiteOpportunity): string {
 
 function opportunityTagColors(op: WebsiteOpportunity): { bg: string; text: string } {
   const q = qualityFromOpportunity(op);
-  if (q === "High") return { bg: "#FAECE7", text: "#712B13" };
-  if (q === "Medium") return { bg: "#FAEEDA", text: "#633806" };
-  return { bg: "#F1EFE8", text: "#2C2C2A" };
+  if (q === "High") return { bg: "oklch(0.88 0.05 45)", text: "oklch(0.38 0.12 40)" };
+  if (q === "Medium") return { bg: "oklch(0.90 0.04 80)", text: "oklch(0.40 0.05 55)" };
+  return { bg: "oklch(0.91 0.02 80)", text: "oklch(0.35 0.01 60)" };
 }
 
 function addDaysISO(days: number): string {
@@ -443,11 +443,11 @@ function OutcomeActions({
 
   const buttons: { key: OutcomeKey; label: string; icon: typeof PhoneCall; classes: string; onClick: () => void }[] = [
     { key: "called", label: "Called", icon: PhoneCall, classes: "bg-navy text-navy-foreground", onClick: () => apply("called") },
-    { key: "voicemail", label: "Voicemail", icon: Voicemail, classes: "bg-[oklch(0.78_0.05_300)] text-[oklch(0.25_0.08_300)]", onClick: () => apply("voicemail") },
+    { key: "voicemail", label: "Voicemail", icon: Voicemail, classes: "bg-secondary text-secondary-foreground", onClick: () => apply("voicemail") },
     { key: "callback", label: "Callback", icon: CalendarClock, classes: "bg-gold text-gold-foreground", onClick: () => setPickerFor("callback") },
     { key: "zoom", label: "Zoom booked", icon: Video, classes: "bg-sage text-sage-foreground", onClick: () => setPickerFor("zoom") },
     { key: "notInterested", label: "Not interested", icon: XCircle, classes: "bg-clay/20 text-clay", onClick: () => apply("notInterested") },
-    { key: "sold", label: "Sold", icon: CheckCircle2, classes: "bg-[oklch(0.52_0.12_150)] text-white", onClick: () => apply("sold") },
+    { key: "sold", label: "Sold", icon: CheckCircle2, classes: "bg-sage text-sage-foreground", onClick: () => apply("sold") },
   ];
 
   return (
