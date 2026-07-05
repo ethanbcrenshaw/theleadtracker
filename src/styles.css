@@ -80,10 +80,10 @@
   --muted: oklch(0.920 0.014 88);
   --muted-foreground: oklch(0.475 0.012 70);    /* warm grey ink ~55% */
 
-  --accent: oklch(0.520 0.110 45);              /* burnt sienna */
+  --accent: oklch(0.52 0.19 28);                /* vintage tinted red (~#B23A2E) */
   --accent-foreground: oklch(0.947 0.015 90);
 
-  --destructive: oklch(0.520 0.110 45);
+  --destructive: oklch(0.52 0.19 28);
   --destructive-foreground: oklch(0.947 0.015 90);
 
   /* 1px hairline: ink at 14% */
@@ -92,7 +92,7 @@
   --ring: oklch(0.220 0.008 70);
 
   /* Restrained editorial accents */
-  --sienna: oklch(0.520 0.110 45);
+  --sienna: oklch(0.52 0.19 28);                /* red spot color */
   --olive:  oklch(0.520 0.055 110);
 
   /* Legacy semantic tokens remapped into the print system so old
@@ -107,11 +107,11 @@
   --sage-foreground: oklch(0.947 0.015 90);
   --gold: oklch(0.620 0.020 70);                    /* warm grey */
   --gold-foreground: oklch(0.947 0.015 90);
-  --clay: oklch(0.520 0.110 45);                    /* sienna */
+  --clay: oklch(0.52 0.19 28);                      /* red */
   --clay-foreground: oklch(0.947 0.015 90);
 
   --chart-1: oklch(0.220 0.008 70);
-  --chart-2: oklch(0.520 0.110 45);
+  --chart-2: oklch(0.52 0.19 28);
   --chart-3: oklch(0.520 0.055 110);
   --chart-4: oklch(0.620 0.020 70);
   --chart-5: oklch(0.400 0.008 70);
@@ -137,17 +137,17 @@
   --muted: oklch(0.230 0.008 70);
   --muted-foreground: oklch(0.700 0.012 80);
 
-  --accent: oklch(0.630 0.110 45);
+  --accent: oklch(0.66 0.20 28);                /* brighter red for ink background */
   --accent-foreground: oklch(0.170 0.008 70);
 
-  --destructive: oklch(0.630 0.110 45);
+  --destructive: oklch(0.66 0.20 28);
   --destructive-foreground: oklch(0.170 0.008 70);
 
   --border: color-mix(in oklab, oklch(0.935 0.014 85) 16%, transparent);
   --input: color-mix(in oklab, oklch(0.935 0.014 85) 22%, transparent);
   --ring: oklch(0.935 0.014 85);
 
-  --sienna: oklch(0.630 0.110 45);
+  --sienna: oklch(0.66 0.20 28);
   --olive:  oklch(0.630 0.055 110);
 
   --navy: oklch(0.935 0.014 85);
@@ -160,7 +160,7 @@
   --sage-foreground: oklch(0.170 0.008 70);
   --gold: oklch(0.700 0.012 80);
   --gold-foreground: oklch(0.170 0.008 70);
-  --clay: oklch(0.630 0.110 45);
+  --clay: oklch(0.66 0.20 28);
   --clay-foreground: oklch(0.170 0.008 70);
 
   --shadow-soft: 0 0 #0000;

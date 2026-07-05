@@ -1,6 +1,7 @@
 import { ChevronDown, ArrowUp, ArrowDown } from "lucide-react";
 import type { Lead, LeadStatus, Quality } from "@/lib/types";
 import { QualityBadge, StatusBadge, TagBadge } from "./Badges";
+import { Botanical } from "./Botanical";
 import { formatDate, isValidContactDate, relativeFollowUp, STATUSES } from "@/lib/crm-utils";
 import { useMemo, useState } from "react";
 
@@ -249,9 +250,14 @@ export function LeadTable({ leads, selected, toggleSelect, toggleAll, onView, on
               </tr>
             ))}
             {sorted.length === 0 && (
-              <tr><td colSpan={12} className="text-center py-16 mono text-muted-foreground">
-                — no leads match these filters —
-              </td></tr>
+              <tr>
+                <td colSpan={12} className="text-center py-16 mono text-muted-foreground">
+                  <div className="flex flex-col items-center gap-5">
+                    <Botanical variant="hip" className="h-24 w-20" opacity={0.75} />
+                    <div>— no leads match these filters —</div>
+                  </div>
+                </td>
+              </tr>
             )}
           </tbody>
         </table>
