@@ -20,6 +20,7 @@ export type Database = {
           aiSummary: string | null
           business: string
           callRecords: Json | null
+          callScript: Json | null
           city: string
           confidenceEvidence: Json
           confidenceScore: number | null
@@ -52,6 +53,7 @@ export type Database = {
           aiSummary?: string | null
           business?: string
           callRecords?: Json | null
+          callScript?: Json | null
           city?: string
           confidenceEvidence?: Json
           confidenceScore?: number | null
@@ -84,6 +86,7 @@ export type Database = {
           aiSummary?: string | null
           business?: string
           callRecords?: Json | null
+          callScript?: Json | null
           city?: string
           confidenceEvidence?: Json
           confidenceScore?: number | null
