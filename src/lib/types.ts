@@ -89,6 +89,23 @@ export interface CallRecord {
   onlinePresenceNotes: string;
   nextAction: string;
   opportunitySummary: string;
+  /** Where the raw text originated. Future-proofs live transcription. */
+  source?: "notes" | "transcript";
+}
+
+export interface CallScriptObjection {
+  objection: string;
+  response: string;
+}
+
+export interface CallScript {
+  opener: string;
+  pitchAngle: string;
+  discovery: string[];
+  objections: CallScriptObjection[];
+  generatedAt: string; // ISO
+  /** Timestamp of the enrichment the script was built from — lets us know when it's stale. */
+  enrichedAt?: string;
 }
 
 export interface Lead {
@@ -121,4 +138,5 @@ export interface Lead {
   unverified?: boolean;
   unverifiedReason?: string;
   enrichment?: LeadEnrichment;
+  callScript?: CallScript;
 }
