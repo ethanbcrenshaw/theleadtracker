@@ -1,10 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, X, Loader2, AlertCircle, Check, ExternalLink, Globe, Phone, MapPin } from "lucide-react";
 import { useLeads } from "@/lib/store";
 import type { Lead, LeadEnrichment, LeadSource, WebsiteOpportunity } from "@/lib/types";
 
-interface Props { open: boolean; onClose: () => void }
+interface Props {
+  open: boolean;
+  onClose: () => void;
+  initialIndustry?: string;
+  initialCity?: string;
+}
 
 const ALLOWED_SOURCES: LeadSource[] = [
   "Yelp","Facebook","Google Business","Angie's List","MapQuest","Website","Instagram","Houzz","Directory","Other",
@@ -40,7 +45,7 @@ type Candidate = {
   _selected: boolean;
 };
 
-export function AIGenerateModal({ open, onClose }: Props) {
+export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }: Props) {
   const addLeads = useLeads((s) => s.addLeads);
   const existing = useLeads((s) => s.leads);
   const [industry, setIndustry] = useState("Upholstery");
@@ -51,6 +56,12 @@ export function AIGenerateModal({ open, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState("");
   const [candidates, setCandidates] = useState<Candidate[] | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    if (initialIndustry) setIndustry(initialIndustry);
+    if (initialCity) setCity(initialCity);
+  }, [open, initialIndustry, initialCity]);
 
   function reset() {
     setCandidates(null);

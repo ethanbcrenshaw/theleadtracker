@@ -14,6 +14,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiSummarizeCallRouteImport } from './routes/api/summarize-call'
 import { Route as ApiGenerateLeadsRouteImport } from './routes/api/generate-leads'
 import { Route as ApiEnrichLeadRouteImport } from './routes/api/enrich-lead'
+import { Route as ApiDailyBriefRouteImport } from './routes/api/daily-brief'
 import { Route as ApiCallScriptRouteImport } from './routes/api/call-script'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
@@ -42,6 +43,11 @@ const ApiGenerateLeadsRoute = ApiGenerateLeadsRouteImport.update({
 const ApiEnrichLeadRoute = ApiEnrichLeadRouteImport.update({
   id: '/api/enrich-lead',
   path: '/api/enrich-lead',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDailyBriefRoute = ApiDailyBriefRouteImport.update({
+  id: '/api/daily-brief',
+  path: '/api/daily-brief',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiCallScriptRoute = ApiCallScriptRouteImport.update({
@@ -74,6 +80,7 @@ export interface FileRoutesByFullPath {
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/api/call-script': typeof ApiCallScriptRoute
+  '/api/daily-brief': typeof ApiDailyBriefRoute
   '/api/enrich-lead': typeof ApiEnrichLeadRoute
   '/api/generate-leads': typeof ApiGenerateLeadsRoute
   '/api/summarize-call': typeof ApiSummarizeCallRoute
@@ -85,6 +92,7 @@ export interface FileRoutesByTo {
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/api/call-script': typeof ApiCallScriptRoute
+  '/api/daily-brief': typeof ApiDailyBriefRoute
   '/api/enrich-lead': typeof ApiEnrichLeadRoute
   '/api/generate-leads': typeof ApiGenerateLeadsRoute
   '/api/summarize-call': typeof ApiSummarizeCallRoute
@@ -97,6 +105,7 @@ export interface FileRoutesById {
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/api/call-script': typeof ApiCallScriptRoute
+  '/api/daily-brief': typeof ApiDailyBriefRoute
   '/api/enrich-lead': typeof ApiEnrichLeadRoute
   '/api/generate-leads': typeof ApiGenerateLeadsRoute
   '/api/summarize-call': typeof ApiSummarizeCallRoute
@@ -110,6 +119,7 @@ export interface FileRouteTypes {
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
     | '/api/call-script'
+    | '/api/daily-brief'
     | '/api/enrich-lead'
     | '/api/generate-leads'
     | '/api/summarize-call'
@@ -121,6 +131,7 @@ export interface FileRouteTypes {
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
     | '/api/call-script'
+    | '/api/daily-brief'
     | '/api/enrich-lead'
     | '/api/generate-leads'
     | '/api/summarize-call'
@@ -132,6 +143,7 @@ export interface FileRouteTypes {
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
     | '/api/call-script'
+    | '/api/daily-brief'
     | '/api/enrich-lead'
     | '/api/generate-leads'
     | '/api/summarize-call'
@@ -144,6 +156,7 @@ export interface RootRouteChildren {
   Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   ApiCallScriptRoute: typeof ApiCallScriptRoute
+  ApiDailyBriefRoute: typeof ApiDailyBriefRoute
   ApiEnrichLeadRoute: typeof ApiEnrichLeadRoute
   ApiGenerateLeadsRoute: typeof ApiGenerateLeadsRoute
   ApiSummarizeCallRoute: typeof ApiSummarizeCallRoute
@@ -187,6 +200,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiEnrichLeadRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/daily-brief': {
+      id: '/api/daily-brief'
+      path: '/api/daily-brief'
+      fullPath: '/api/daily-brief'
+      preLoaderRoute: typeof ApiDailyBriefRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/call-script': {
       id: '/api/call-script'
       path: '/api/call-script'
@@ -225,6 +245,7 @@ const rootRouteChildren: RootRouteChildren = {
   Char91DotwellKnownChar93OauthProtectedResourceRoute:
     Char91DotwellKnownChar93OauthProtectedResourceRoute,
   ApiCallScriptRoute: ApiCallScriptRoute,
+  ApiDailyBriefRoute: ApiDailyBriefRoute,
   ApiEnrichLeadRoute: ApiEnrichLeadRoute,
   ApiGenerateLeadsRoute: ApiGenerateLeadsRoute,
   ApiSummarizeCallRoute: ApiSummarizeCallRoute,
