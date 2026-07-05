@@ -134,6 +134,10 @@ export function DailyBriefing({
   async function fetchBriefing(force = false) {
     if (briefingLoading) return;
     if (!force && briefing) return;
+    // Wait until the store has hydrated. Zero leads is legitimate but usually
+    // means we're racing the Supabase fetch — a same-day briefing generated
+    // against an empty board would then poison the cache.
+    if (!force && stats.total === 0) return;
     setBriefingLoading(true);
     setBriefingErr(false);
     try {
@@ -156,7 +160,7 @@ export function DailyBriefing({
   useEffect(() => {
     void fetchBriefing(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [stats.total]);
 
   const fallbackBriefing = useMemo(() => {
     const parts: string[] = [];
