@@ -1,5 +1,3 @@
-import { Flame, CalendarClock, Workflow, Table2, BarChart3 } from "lucide-react";
-
 export type SavedView = "hot" | "followups" | "pipeline" | "all" | "analytics";
 
 interface Props {
@@ -8,54 +6,40 @@ interface Props {
   counts: Record<Exclude<SavedView, "analytics">, number>;
 }
 
-const PILLS: { id: SavedView; label: string; icon: typeof Flame }[] = [
-  { id: "hot", label: "Hot, not called", icon: Flame },
-  { id: "followups", label: "Follow-ups due", icon: CalendarClock },
-  { id: "pipeline", label: "Pipeline", icon: Workflow },
-  { id: "all", label: "All leads", icon: Table2 },
+const PAD = (n: number) => String(n).padStart(3, "0");
+
+const TABS: { id: SavedView; label: string }[] = [
+  { id: "hot",       label: "Hot" },
+  { id: "followups", label: "Follow-ups" },
+  { id: "pipeline",  label: "Pipeline" },
+  { id: "all",       label: "All" },
+  { id: "analytics", label: "Analytics" },
 ];
 
 export function SavedViewPills({ view, setView, counts }: Props) {
   return (
-    <div className="flex items-center justify-between gap-3 flex-wrap">
-      <div className="flex flex-wrap items-center gap-2">
-        {PILLS.map((p) => {
-          const active = view === p.id;
-          const count = counts[p.id as Exclude<SavedView, "analytics">];
-          return (
-            <button
-              key={p.id}
-              onClick={() => setView(p.id)}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium border transition-all ${
-                active
-                  ? "bg-navy text-navy-foreground border-navy shadow-soft"
-                  : "bg-card text-foreground border-border hover:border-navy/40"
-              }`}
-            >
-              <p.icon className="h-4 w-4" />
-              {p.label}
-              <span
-                className={`inline-flex items-center justify-center min-w-[1.4rem] h-5 px-1.5 rounded-full text-[11px] font-semibold ${
-                  active ? "bg-navy-foreground/15 text-navy-foreground" : "bg-secondary text-muted-foreground"
-                }`}
-              >
-                {count}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-      <button
-        onClick={() => setView("analytics")}
-        className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-sm font-medium border transition-all ${
-          view === "analytics"
-            ? "bg-navy text-navy-foreground border-navy shadow-soft"
-            : "bg-card text-muted-foreground border-border hover:border-navy/40 hover:text-foreground"
-        }`}
-      >
-        <BarChart3 className="h-4 w-4" />
-        Analytics
-      </button>
+    <div className="border-b border-border flex items-end gap-8 overflow-x-auto">
+      {TABS.map((t) => {
+        const active = view === t.id;
+        const count =
+          t.id === "analytics" ? null : counts[t.id as Exclude<SavedView, "analytics">];
+        return (
+          <button
+            key={t.id}
+            onClick={() => setView(t.id)}
+            className={`mono py-3 -mb-px whitespace-nowrap border-b-2 transition-colors ${
+              active
+                ? "border-foreground text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t.label}
+            {count !== null && (
+              <span className="ml-2 opacity-60">— {PAD(count)}</span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
