@@ -63,7 +63,7 @@ export function Botanical({
       />
       {spot && (
         <span
-          className="absolute rounded-full"
+          className="absolute rounded-full mix-blend-multiply dark:mix-blend-normal"
           style={{
             top: spot.top,
             left: spot.left,
@@ -72,8 +72,12 @@ export function Botanical({
             transform: "translate(-50%, -50%)",
             background:
               "radial-gradient(circle at 40% 35%, color-mix(in oklab, var(--sienna) 95%, transparent) 0%, color-mix(in oklab, var(--sienna) 70%, transparent) 55%, color-mix(in oklab, var(--sienna) 0%, transparent) 78%)",
-            mixBlendMode: "multiply",
-            opacity: Math.min(1, o * 3.5),
+            opacity:
+              Math.min(1, o * 3.5) *
+              (typeof document !== "undefined" &&
+              document.documentElement.classList.contains("dark")
+                ? 0.75
+                : 1),
           }}
         />
       )}
