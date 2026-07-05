@@ -15,11 +15,15 @@ export function Wordmark({ className, size = 22, accent = true }: Props) {
   // Layout tuned so the flower sits in the visual weight of an "o".
   // Total viewBox width chosen empirically for Instrument Serif metrics.
   const h = 40;
-  const w = 260;
-  const flowerCx = 226; // x-center of the second o in "bloom"
-  const flowerCy = 27;
+  const w = 250;
+  // Positions tuned for Instrument Serif at fontSize 34.
+  const leftText = "lead bloo";
+  const rightText = "m";
+  const flowerCx = 195;
+  const rightX = 210;
+  const flowerCy = 20;
   const petalR = 5.4;
-  const petalOffset = 5.6;
+  const petalOffset = 5.4;
   const style: CSSProperties = {
     height: size,
     width: "auto",
@@ -35,7 +39,7 @@ export function Wordmark({ className, size = 22, accent = true }: Props) {
     >
       <text
         x="0"
-        y="32"
+        y="30"
         fill="currentColor"
         style={{
           fontFamily: '"Instrument Serif", serif',
@@ -44,8 +48,20 @@ export function Wordmark({ className, size = 22, accent = true }: Props) {
           letterSpacing: "-0.01em",
         }}
       >
-        {/* Render everything except the last "o" of bloom; flower takes its slot */}
-        lead blo m
+        {leftText}
+      </text>
+      <text
+        x={rightX}
+        y="30"
+        fill="currentColor"
+        style={{
+          fontFamily: '"Instrument Serif", serif',
+          fontSize: "34px",
+          fontWeight: 400,
+          letterSpacing: "-0.01em",
+        }}
+      >
+        {rightText}
       </text>
       {/* Fine line flower in place of the last "o" */}
       <g
