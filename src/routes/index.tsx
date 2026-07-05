@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Search, Sparkles, Download, Plus } from "lucide-react";
 import { useLeads } from "@/lib/store";
 import { exportCSV, isValidContactDate } from "@/lib/crm-utils";
 import { StatsCards } from "@/components/crm/StatsCards";
@@ -13,6 +12,8 @@ import { AnalyticsView } from "@/components/crm/AnalyticsView";
 import { AIGenerateModal } from "@/components/crm/AIGenerateModal";
 import { BulkBar } from "@/components/crm/BulkBar";
 import { CallAssistant } from "@/components/crm/CallAssistant";
+import { AddLeadSheet } from "@/components/crm/AddLeadSheet";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import type { Lead } from "@/lib/types";
 
 export const Route = createFileRoute("/")({
@@ -23,11 +24,7 @@ export const Route = createFileRoute("/")({
       { property: "og:title", content: "Lead Management — Local Business CRM" },
       { property: "og:description", content: "Track, prioritize, and follow up with local business leads." },
     ],
-    links: [
-      { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@400;500;600;700&display=swap" },
-    ],
+    links: [],
   }),
   component: Dashboard,
 });
@@ -44,6 +41,7 @@ function Dashboard() {
   const [aiOpen, setAiOpen] = useState(false);
   const [callLead, setCallLead] = useState<Lead | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [addOpen, setAddOpen] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
     city: "All", quality: "All", status: "All", opportunity: "All", source: "All",
   });
@@ -151,71 +149,69 @@ function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border bg-gradient-to-b from-maroon/[0.04] via-background to-transparent">
-        <div className="max-w-[1500px] mx-auto px-8 py-12">
-          <div className="flex items-start justify-between flex-wrap gap-6">
-            <div>
-              <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-maroon mb-4">
-                <span className="h-1.5 w-1.5 rounded-full bg-maroon" />
-                CRM · Local Business Outreach
-              </div>
-              <h1 className="font-display text-5xl sm:text-6xl font-medium text-navy tracking-tight">
-                Lead Management
-              </h1>
-              <p className="mt-4 text-muted-foreground max-w-xl leading-relaxed">
-                Track, prioritize, and follow up with local business leads.
-                <span className="italic"> Start with your highest-opportunity leads.</span>
-              </p>
+      {/* Editorial masthead */}
+      <header>
+        {/* top bar */}
+        <div className="border-b border-border">
+          <div className="max-w-[1500px] mx-auto px-8 py-3 flex items-center justify-between">
+            <div className="mono text-foreground">lead bloom&nbsp;&nbsp;✳</div>
+            <div className="flex items-center gap-6">
+              <button onClick={() => setAiOpen(true)} className="mono ink-link">[ AI GENERATE ]</button>
+              <button onClick={() => exportCSV(allFiltered)} className="mono ink-link">[ EXPORT CSV ]</button>
+              <button onClick={() => setAddOpen(true)} className="mono px-3 py-1 bg-foreground text-background hover:opacity-90">
+                [ ADD LEAD ]
+              </button>
+              <ThemeToggle />
             </div>
-            <div className="flex items-center gap-3 flex-wrap">
-              <button onClick={() => setAiOpen(true)}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-br from-navy to-[oklch(0.30_0.08_265)] text-navy-foreground text-sm font-medium shadow-soft hover:shadow-elev transition-shadow">
-                <Sparkles className="h-4 w-4" /> Generate Leads with AI
-              </button>
-              <button onClick={() => exportCSV(allFiltered)}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-card border border-border text-sm font-medium hover:bg-secondary transition-colors">
-                <Download className="h-4 w-4" /> Export CSV
-              </button>
-              <button
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-maroon text-maroon-foreground text-sm font-medium hover:opacity-90 transition-opacity"
-                onClick={() => alert("Add Lead form coming soon — for now use AI Generate.")}>
-                <Plus className="h-4 w-4" /> Add Lead
-              </button>
-            </div>
+          </div>
+        </div>
+
+        {/* masthead */}
+        <div className="max-w-[1500px] mx-auto px-8 pt-14 pb-16 border-b border-border">
+          <div className="mono text-muted-foreground">CRM — LOCAL BUSINESS OUTREACH — 2026</div>
+          <div className="mt-6 grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-10 items-end">
+            <h1 className="font-display font-normal text-foreground lowercase tracking-tight leading-[0.95] text-[clamp(4rem,11vw,7rem)]">
+              leads
+            </h1>
+            <p className="text-muted-foreground max-w-sm lg:text-right leading-relaxed text-sm">
+              A working ledger for local businesses. Track, prioritize, and follow up on
+              the ones most likely to say yes. Start with the highest-opportunity entries.
+            </p>
           </div>
         </div>
       </header>
 
-      <main className="max-w-[1500px] mx-auto px-8 py-10 space-y-8">
+      <main className="max-w-[1500px] mx-auto px-8 py-12 space-y-10">
         <StatsCards leads={leads} />
 
-        <div className="space-y-4">
+        <div className="space-y-5">
           <SavedViewPills view={view} setView={setView} counts={counts} />
 
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="relative w-full sm:w-80">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="w-full sm:w-96">
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search business or city…"
-                className="w-full pl-9 pr-3 py-2 rounded-xl bg-card border border-border text-sm focus:outline-none focus:ring-2 focus:ring-ring/40"
+                placeholder="SEARCH BUSINESS OR CITY"
+                className="mono w-full bg-transparent border-0 border-b border-border py-2 focus:outline-none focus:border-foreground text-foreground placeholder:text-muted-foreground"
+                style={{ fontSize: "11px" }}
               />
             </div>
             {view !== "analytics" && (
-              <div className="text-xs text-muted-foreground">
-                Showing{" "}
-                <span className="font-medium text-foreground">
-                  {view === "hot"
-                    ? hotLeads.length
-                    : view === "followups"
-                      ? followupLeads.length
-                      : view === "pipeline"
-                        ? pipelineLeads.length
-                        : allFiltered.length}
+              <div className="mono text-muted-foreground">
+                SHOWING{" "}
+                <span className="text-foreground">
+                  {String(
+                    view === "hot"
+                      ? hotLeads.length
+                      : view === "followups"
+                        ? followupLeads.length
+                        : view === "pipeline"
+                          ? pipelineLeads.length
+                          : allFiltered.length,
+                  ).padStart(3, "0")}
                 </span>{" "}
-                of {leads.length} leads
+                / {String(leads.length).padStart(3, "0")}
               </div>
             )}
           </div>
@@ -226,11 +222,24 @@ function Dashboard() {
         </div>
 
         {view === "hot" && (
+          <SectionHeader label="Hot, Not Called" count={hotLeads.length} />
+        )}
+        {view === "followups" && (
+          <SectionHeader label="Follow-ups Due" count={followupLeads.length} />
+        )}
+        {view === "pipeline" && (
+          <SectionHeader label="Pipeline" count={pipelineLeads.length} />
+        )}
+        {view === "all" && (
+          <SectionHeader label="All Leads" count={allFiltered.length} />
+        )}
+
+        {view === "hot" && (
           <QueueView
             leads={hotLeads}
             presorted
             title="Hot, not called"
-            emptyMessage="No high-quality leads waiting to be called. Nice work."
+            emptyMessage="— no high-quality leads waiting — nice work —"
             onStartCall={setCallLead}
           />
         )}
@@ -239,7 +248,7 @@ function Dashboard() {
             leads={followupLeads}
             presorted
             title="Follow-ups due"
-            emptyMessage="No follow-ups due today. You're caught up."
+            emptyMessage="— no follow-ups due today — you're caught up —"
             onStartCall={setCallLead}
           />
         )}
@@ -248,7 +257,7 @@ function Dashboard() {
             leads={pipelineLeads}
             presorted
             title="Pipeline"
-            emptyMessage="No leads currently in your pipeline."
+            emptyMessage="— no leads currently in your pipeline —"
             onStartCall={setCallLead}
           />
         )}
@@ -265,21 +274,33 @@ function Dashboard() {
         )}
         {view === "analytics" && <AnalyticsView leads={leads} />}
 
-        <footer className="text-center text-sm text-muted-foreground py-12 italic font-display">
-          Facebook-only businesses are often strong website prospects. Keep going. ✦
+        <footer className="border-t border-border pt-8 mt-16">
+          <div className="mono text-muted-foreground text-center">
+            FACEBOOK-ONLY BUSINESSES ARE OFTEN STRONG WEBSITE PROSPECTS — KEEP GOING
+          </div>
         </footer>
       </main>
 
       <LeadDetail lead={active} onClose={() => setActive(null)} onStartCall={setCallLead} />
       <CallAssistant lead={callLead} onClose={() => setCallLead(null)} />
       <AIGenerateModal open={aiOpen} onClose={() => setAiOpen(false)} />
+      <AddLeadSheet open={addOpen} onOpenChange={setAddOpen} />
       <BulkBar
         count={selected.size}
         onClear={() => setSelected(new Set())}
         onStatus={(s) => { bulkSetStatus(Array.from(selected), s); setSelected(new Set()); }}
-        onDelete={() => { if (confirm(`Delete ${selected.size} leads?`)) { bulkDelete(Array.from(selected)); setSelected(new Set()); } }}
+        onDelete={() => { bulkDelete(Array.from(selected)); setSelected(new Set()); }}
         onExport={() => { exportCSV(leads.filter((l) => selected.has(l.id))); }}
       />
+    </div>
+  );
+}
+
+function SectionHeader({ label, count }: { label: string; count: number }) {
+  return (
+    <div className="border-b-2 border-foreground/60 pb-2 flex items-baseline justify-between">
+      <div className="mono text-foreground">{label.toUpperCase()}</div>
+      <div className="mono text-muted-foreground">— {String(count).padStart(3, "0")}</div>
     </div>
   );
 }

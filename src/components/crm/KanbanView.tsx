@@ -1,6 +1,6 @@
 import type { Lead } from "@/lib/types";
-import { STATUSES, statusClasses } from "@/lib/crm-utils";
-import { QualityBadge } from "./Badges";
+import { STATUSES } from "@/lib/crm-utils";
+import { QualityBadge, StatusBadge } from "./Badges";
 
 interface Props { leads: Lead[]; onView: (l: Lead) => void }
 
@@ -10,33 +10,31 @@ export function KanbanView({ leads, onView }: Props) {
       {STATUSES.map((status) => {
         const items = leads.filter((l) => l.status === status);
         return (
-          <div key={status} className="rounded-2xl bg-card border border-border p-3 shadow-soft min-h-[200px]">
-            <div className="flex items-center justify-between mb-3">
-              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${statusClasses(status)}`}>
-                {status}
-              </span>
-              <span className="text-xs text-muted-foreground font-mono">{items.length}</span>
+          <div key={status} className="border border-border p-3 min-h-[200px] bg-card">
+            <div className="flex items-center justify-between mb-3 pb-2 border-b border-border">
+              <StatusBadge s={status} />
+              <span className="mono text-muted-foreground">{String(items.length).padStart(3, "0")}</span>
             </div>
             <div className="space-y-2">
               {items.map((l) => (
                 <button
                   key={l.id}
                   onClick={() => onView(l)}
-                  className="w-full text-left rounded-xl bg-background border border-border p-3 hover:border-navy/40 hover:shadow-soft transition-all"
+                  className="w-full text-left border border-border p-3 hover:border-foreground/40 transition-colors bg-background"
                 >
-                  <div className="font-medium text-sm text-foreground">{l.business}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{l.city}, {l.state}</div>
-                  <a href={`tel:${l.phone}`} className="text-xs font-mono text-navy mt-1 block" onClick={(e) => e.stopPropagation()}>
+                  <div className="font-display text-lg text-foreground leading-tight">{l.business}</div>
+                  <div className="mono text-muted-foreground mt-1">{l.city}, {l.state}</div>
+                  <a href={`tel:${l.phone}`} className="mono ink-link mt-2 inline-block" onClick={(e) => e.stopPropagation()}>
                     {l.phone}
                   </a>
                   <div className="flex items-center justify-between mt-2">
                     <QualityBadge q={l.quality} />
-                    <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">{l.websiteOpportunity}</span>
+                    <span className="mono text-muted-foreground truncate max-w-[140px]">{l.websiteOpportunity}</span>
                   </div>
                 </button>
               ))}
               {items.length === 0 && (
-                <div className="text-xs text-muted-foreground italic text-center py-6">Empty</div>
+                <div className="mono text-muted-foreground text-center py-6">— empty —</div>
               )}
             </div>
           </div>

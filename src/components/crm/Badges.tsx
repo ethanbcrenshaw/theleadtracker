@@ -1,19 +1,44 @@
 import type { Quality, LeadStatus } from "@/lib/types";
-import { qualityClasses, statusClasses } from "@/lib/crm-utils";
 
-export function QualityBadge({ q }: { q: Quality }) {
+/**
+ * Small rectangular ink-tag with a colored dot. Editorial print-catalog styling.
+ */
+function DotTag({ label, dot }: { label: string; dot: string }) {
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${qualityClasses(q)}`}>
-      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
-      {q}
+    <span
+      className="mono inline-flex items-center gap-1.5 whitespace-nowrap px-1.5 py-1 border border-border text-foreground"
+    >
+      <span
+        className="inline-block h-1.5 w-1.5 rounded-full"
+        style={{ background: dot }}
+      />
+      {label}
     </span>
   );
 }
 
+function qualityDot(q: Quality): string {
+  if (q === "High") return "var(--sienna)";
+  if (q === "Medium") return "var(--olive)";
+  return "color-mix(in oklab, var(--foreground) 45%, transparent)";
+}
+
+function statusDot(s: LeadStatus): string {
+  switch (s) {
+    case "Not Called":     return "color-mix(in oklab, var(--foreground) 25%, transparent)";
+    case "Called":         return "var(--olive)";
+    case "Voicemail":      return "color-mix(in oklab, var(--foreground) 40%, transparent)";
+    case "Callback Scheduled": return "var(--sienna)";
+    case "Zoom Booked":    return "var(--olive)";
+    case "Sold":           return "var(--olive)";
+    case "Not Interested": return "color-mix(in oklab, var(--foreground) 30%, transparent)";
+  }
+}
+
+export function QualityBadge({ q }: { q: Quality }) {
+  return <DotTag label={q} dot={qualityDot(q)} />;
+}
+
 export function StatusBadge({ s }: { s: LeadStatus }) {
-  return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border whitespace-nowrap ${statusClasses(s)}`}>
-      {s}
-    </span>
-  );
+  return <DotTag label={s} dot={statusDot(s)} />;
 }

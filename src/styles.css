@@ -5,8 +5,9 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-display: "Fraunces", ui-serif, Georgia, "Times New Roman", serif;
+  --font-display: "Instrument Serif", ui-serif, Georgia, "Times New Roman", serif;
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -47,111 +48,123 @@
   --color-navy-foreground: var(--navy-foreground);
   --color-maroon: var(--maroon);
   --color-maroon-foreground: var(--maroon-foreground);
+  --color-ink: var(--foreground);
+  --color-paper: var(--background);
+  --color-sienna: var(--sienna);
+  --color-olive: var(--olive);
 
-  --shadow-soft: 0 1px 2px oklch(0.35 0.04 55 / 0.06), 0 4px 16px oklch(0.35 0.04 55 / 0.06);
-  --shadow-elev: 0 2px 4px oklch(0.35 0.04 55 / 0.08), 0 12px 32px oklch(0.35 0.04 55 / 0.10);
+  --shadow-soft: 0 0 #0000;
+  --shadow-elev: 0 0 #0000;
 }
 
 :root {
-  --radius: 0.875rem;
+  --radius: 0rem;
 
-  /* Warm cream / oat canvas — never pure white */
-  --background: oklch(0.952 0.018 80);          /* #F5F0E6 */
-  --foreground: oklch(0.235 0.008 60);          /* soft charcoal #262320 */
+  /* Paper cream + warm ink */
+  --background: oklch(0.947 0.015 90);          /* #F2EEE3 */
+  --foreground: oklch(0.220 0.008 70);          /* #201D1A warm ink */
 
-  --card: oklch(0.970 0.014 85);                /* #FAF6EE warmer cream */
-  --card-foreground: oklch(0.235 0.008 60);
+  --card: oklch(0.955 0.014 88);                /* same paper, ~1% brighter */
+  --card-foreground: var(--foreground);
 
-  --popover: oklch(0.970 0.014 85);
-  --popover-foreground: oklch(0.235 0.008 60);
+  --popover: oklch(0.960 0.014 88);
+  --popover-foreground: var(--foreground);
 
-  /* Terracotta primary */
-  --primary: oklch(0.620 0.130 45);             /* #C26B43 */
-  --primary-foreground: oklch(0.970 0.014 85);
+  /* Primary = ink itself. Solid ink buttons with cream text. */
+  --primary: oklch(0.220 0.008 70);
+  --primary-foreground: oklch(0.947 0.015 90);
 
-  --secondary: oklch(0.905 0.024 80);           /* oat surface */
-  --secondary-foreground: oklch(0.235 0.008 60);
+  --secondary: oklch(0.920 0.014 88);           /* faint oat wash */
+  --secondary-foreground: var(--foreground);
 
-  --muted: oklch(0.915 0.020 80);
-  --muted-foreground: oklch(0.430 0.045 55);    /* walnut */
+  --muted: oklch(0.920 0.014 88);
+  --muted-foreground: oklch(0.475 0.012 70);    /* warm grey ink ~55% */
 
-  /* Blush accent */
-  --accent: oklch(0.880 0.045 45);
-  --accent-foreground: oklch(0.420 0.130 40);
+  --accent: oklch(0.520 0.110 45);              /* burnt sienna */
+  --accent-foreground: oklch(0.947 0.015 90);
 
-  --destructive: oklch(0.520 0.155 35);
-  --destructive-foreground: oklch(0.970 0.014 85);
+  --destructive: oklch(0.520 0.110 45);
+  --destructive-foreground: oklch(0.947 0.015 90);
 
-  --border: oklch(0.870 0.025 80);              /* warm tan border */
-  --input: oklch(0.870 0.025 80);
-  --ring: oklch(0.620 0.130 45);
+  /* 1px hairline: ink at 14% */
+  --border: color-mix(in oklab, oklch(0.220 0.008 70) 14%, transparent);
+  --input: color-mix(in oklab, oklch(0.220 0.008 70) 20%, transparent);
+  --ring: oklch(0.220 0.008 70);
 
-  /* Semantic brand tokens (used across components) */
-  --navy: oklch(0.430 0.045 55);                /* walnut #6B4F3A */
-  --navy-foreground: oklch(0.970 0.014 85);
-  --maroon: oklch(0.620 0.130 45);              /* terracotta */
-  --maroon-foreground: oklch(0.970 0.014 85);
-  --tan: oklch(0.905 0.024 80);                 /* oat surface */
-  --tan-foreground: oklch(0.430 0.045 55);
-  --sage: oklch(0.600 0.040 130);               /* muted sage */
-  --sage-foreground: oklch(0.970 0.014 85);
-  --gold: oklch(0.820 0.070 35);                /* warm blush/coral */
-  --gold-foreground: oklch(0.420 0.130 40);
-  --clay: oklch(0.620 0.130 45);                /* terracotta */
-  --clay-foreground: oklch(0.970 0.014 85);
+  /* Restrained editorial accents */
+  --sienna: oklch(0.520 0.110 45);
+  --olive:  oklch(0.520 0.055 110);
 
-  --chart-1: oklch(0.620 0.130 45);
-  --chart-2: oklch(0.600 0.040 130);
-  --chart-3: oklch(0.430 0.045 55);
-  --chart-4: oklch(0.820 0.070 35);
-  --chart-5: oklch(0.360 0.040 135);
+  /* Legacy semantic tokens remapped into the print system so old
+     className references keep working with the new look. */
+  --navy: oklch(0.220 0.008 70);                    /* ink */
+  --navy-foreground: oklch(0.947 0.015 90);         /* paper */
+  --maroon: oklch(0.220 0.008 70);                  /* ink (primary) */
+  --maroon-foreground: oklch(0.947 0.015 90);
+  --tan: oklch(0.920 0.014 88);                     /* faint oat */
+  --tan-foreground: oklch(0.220 0.008 70);
+  --sage: oklch(0.520 0.055 110);                   /* olive */
+  --sage-foreground: oklch(0.947 0.015 90);
+  --gold: oklch(0.620 0.020 70);                    /* warm grey */
+  --gold-foreground: oklch(0.947 0.015 90);
+  --clay: oklch(0.520 0.110 45);                    /* sienna */
+  --clay-foreground: oklch(0.947 0.015 90);
+
+  --chart-1: oklch(0.220 0.008 70);
+  --chart-2: oklch(0.520 0.110 45);
+  --chart-3: oklch(0.520 0.055 110);
+  --chart-4: oklch(0.620 0.020 70);
+  --chart-5: oklch(0.400 0.008 70);
 }
 
 .dark {
-  /* Cozy dim — deep walnut/espresso with cream text */
-  --background: oklch(0.220 0.018 55);
-  --foreground: oklch(0.935 0.020 80);
+  /* Ink paper: inverted, same rules. */
+  --background: oklch(0.170 0.008 70);          /* #171512 */
+  --foreground: oklch(0.935 0.014 85);          /* #EDE8DC cream */
 
-  --card: oklch(0.265 0.020 55);
-  --card-foreground: oklch(0.935 0.020 80);
+  --card: oklch(0.185 0.008 70);
+  --card-foreground: var(--foreground);
 
-  --popover: oklch(0.265 0.020 55);
-  --popover-foreground: oklch(0.935 0.020 80);
+  --popover: oklch(0.200 0.008 70);
+  --popover-foreground: var(--foreground);
 
-  --primary: oklch(0.680 0.130 45);
-  --primary-foreground: oklch(0.220 0.018 55);
+  --primary: oklch(0.935 0.014 85);
+  --primary-foreground: oklch(0.170 0.008 70);
 
-  --secondary: oklch(0.310 0.022 55);
-  --secondary-foreground: oklch(0.935 0.020 80);
+  --secondary: oklch(0.230 0.008 70);
+  --secondary-foreground: var(--foreground);
 
-  --muted: oklch(0.300 0.020 55);
-  --muted-foreground: oklch(0.760 0.025 75);
+  --muted: oklch(0.230 0.008 70);
+  --muted-foreground: oklch(0.700 0.012 80);
 
-  --accent: oklch(0.380 0.060 40);
-  --accent-foreground: oklch(0.935 0.020 80);
+  --accent: oklch(0.630 0.110 45);
+  --accent-foreground: oklch(0.170 0.008 70);
 
-  --destructive: oklch(0.580 0.160 35);
-  --destructive-foreground: oklch(0.970 0.014 85);
+  --destructive: oklch(0.630 0.110 45);
+  --destructive-foreground: oklch(0.170 0.008 70);
 
-  --border: oklch(0.350 0.022 55);
-  --input: oklch(0.330 0.020 55);
-  --ring: oklch(0.680 0.130 45);
+  --border: color-mix(in oklab, oklch(0.935 0.014 85) 16%, transparent);
+  --input: color-mix(in oklab, oklch(0.935 0.014 85) 22%, transparent);
+  --ring: oklch(0.935 0.014 85);
 
-  --navy: oklch(0.560 0.045 55);
-  --navy-foreground: oklch(0.970 0.014 85);
-  --maroon: oklch(0.680 0.130 45);
-  --maroon-foreground: oklch(0.220 0.018 55);
-  --tan: oklch(0.330 0.022 55);
-  --tan-foreground: oklch(0.935 0.020 80);
-  --sage: oklch(0.620 0.045 130);
-  --sage-foreground: oklch(0.220 0.018 55);
-  --gold: oklch(0.760 0.080 40);
-  --gold-foreground: oklch(0.220 0.018 55);
-  --clay: oklch(0.680 0.130 45);
-  --clay-foreground: oklch(0.220 0.018 55);
+  --sienna: oklch(0.630 0.110 45);
+  --olive:  oklch(0.630 0.055 110);
 
-  --shadow-soft: 0 1px 2px oklch(0 0 0 / 0.45), 0 4px 16px oklch(0 0 0 / 0.35);
-  --shadow-elev: 0 2px 4px oklch(0 0 0 / 0.55), 0 12px 32px oklch(0 0 0 / 0.45);
+  --navy: oklch(0.935 0.014 85);
+  --navy-foreground: oklch(0.170 0.008 70);
+  --maroon: oklch(0.935 0.014 85);
+  --maroon-foreground: oklch(0.170 0.008 70);
+  --tan: oklch(0.230 0.008 70);
+  --tan-foreground: var(--foreground);
+  --sage: oklch(0.630 0.055 110);
+  --sage-foreground: oklch(0.170 0.008 70);
+  --gold: oklch(0.700 0.012 80);
+  --gold-foreground: oklch(0.170 0.008 70);
+  --clay: oklch(0.630 0.110 45);
+  --clay-foreground: oklch(0.170 0.008 70);
+
+  --shadow-soft: 0 0 #0000;
+  --shadow-elev: 0 0 #0000;
 }
 
 @layer base {
@@ -169,11 +182,39 @@
 
   h1, h2, h3, h4 {
     font-family: var(--font-display);
-    letter-spacing: -0.012em;
-    font-weight: 500;
+    letter-spacing: -0.01em;
+    font-weight: 400;
+    line-height: 1.02;
   }
 
   body {
     line-height: 1.6;
   }
+}
+
+@utility mono {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 10.5px;
+  font-weight: 500;
+}
+
+@utility hairline-b {
+  border-bottom-width: 1px;
+  border-bottom-style: solid;
+  border-color: var(--color-border);
+}
+
+@utility hairline-t {
+  border-top-width: 1px;
+  border-top-style: solid;
+  border-color: var(--color-border);
+}
+
+@utility ink-link {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in oklab, var(--foreground) 40%, transparent);
 }

@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Mic, Phone, ChevronRight } from "lucide-react";
 import type { Lead, WebsiteOpportunity } from "@/lib/types";
 import { LeadDetail } from "./LeadDetail";
 import { sortLeads } from "./LeadTable";
-import { qualityFromOpportunity } from "@/lib/crm-utils";
 
 interface Props {
   leads: Lead[];
@@ -30,22 +28,13 @@ function opportunityLabel(op: WebsiteOpportunity): string {
   }
 }
 
-function opportunityTagColors(op: WebsiteOpportunity): { bg: string; text: string } {
-  const q = qualityFromOpportunity(op);
-  if (q === "High") return { bg: "oklch(0.88 0.05 45)", text: "oklch(0.38 0.12 40)" };
-  if (q === "Medium") return { bg: "oklch(0.90 0.04 80)", text: "oklch(0.40 0.05 55)" };
-  return { bg: "oklch(0.91 0.02 80)", text: "oklch(0.35 0.01 60)" };
-}
-
 function OpportunityTag({ op }: { op: WebsiteOpportunity }) {
-  const colors = opportunityTagColors(op);
   return (
     <span
       title={op}
-      className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide max-w-[110px]"
-      style={{ backgroundColor: colors.bg, color: colors.text }}
+      className="mono shrink-0 border border-border px-1.5 py-1 text-muted-foreground max-w-[130px] truncate"
     >
-      <span className="truncate">{opportunityLabel(op)}</span>
+      {opportunityLabel(op)}
     </span>
   );
 }
@@ -77,7 +66,7 @@ export function QueueView({ leads, onStartCall, presorted, emptyMessage, title }
   };
 
   return (
-    <div className="rounded-2xl bg-card border border-border shadow-soft overflow-hidden">
+    <div className="border border-border bg-card">
       <div className="grid lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)] min-h-[70vh]">
         {/* Left: list */}
         <div
@@ -85,42 +74,42 @@ export function QueueView({ leads, onStartCall, presorted, emptyMessage, title }
             mobileOpen ? "hidden lg:block" : "block"
           }`}
         >
-          <div className="px-4 py-3 border-b border-border bg-secondary/40 text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
-            {title ?? "Call Queue"} · {sorted.length}
+          <div className="px-5 py-3 border-b border-border mono text-muted-foreground flex items-center justify-between">
+            <span>{title ?? "Call Queue"}</span>
+            <span>— {String(sorted.length).padStart(3, "0")}</span>
           </div>
           <ul className="divide-y divide-border max-h-[75vh] overflow-y-auto">
-            {sorted.map((l) => {
+            {sorted.map((l, i) => {
               const isActive = l.id === activeId;
               return (
                 <li key={l.id}>
                   <button
                     onClick={() => handlePick(l)}
-                    className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-tan/10 transition-colors ${
-                      isActive ? "lg:bg-tan/15 lg:border-l-2 lg:border-maroon" : ""
+                    className={`w-full text-left px-5 py-4 flex items-start gap-4 hover:bg-foreground/[0.03] transition-colors ${
+                      isActive ? "lg:bg-foreground/[0.05] lg:border-l-2 lg:border-foreground" : ""
                     }`}
                   >
+                    <span className="mono text-muted-foreground w-8 shrink-0 pt-0.5">
+                      {String(i + 1).padStart(3, "0")}
+                    </span>
                     <div className="min-w-0 flex-1">
-                      <div className="font-medium text-foreground truncate">{l.business}</div>
-                      <div className="text-[11px] text-muted-foreground truncate mt-0.5">
+                      <div className="font-display text-xl text-foreground truncate leading-tight">
+                        {l.business}
+                      </div>
+                      <div className="mono text-muted-foreground truncate mt-1.5">
                         {l.city}, {l.state}
                       </div>
                     </div>
                     <OpportunityTag op={l.websiteOpportunity} />
-                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0 lg:hidden" />
                   </button>
                   {onStartCall && (
-                    <div className="px-4 pb-3 flex items-center gap-2 lg:hidden">
-                      <a
-                        href={`tel:${l.phone}`}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary border border-border text-xs"
-                      >
-                        <Phone className="h-3 w-3" /> Dial
-                      </a>
+                    <div className="px-5 pb-3 flex items-center gap-4 lg:hidden">
+                      <a href={`tel:${l.phone}`} className="mono ink-link">[ DIAL ]</a>
                       <button
                         onClick={() => { setActiveId(l.id); onStartCall(l); }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-maroon text-maroon-foreground text-xs"
+                        className="mono ink-link"
                       >
-                        <Mic className="h-3 w-3" /> Call Assistant
+                        [ CALL ASSISTANT ]
                       </button>
                     </div>
                   )}
@@ -128,7 +117,7 @@ export function QueueView({ leads, onStartCall, presorted, emptyMessage, title }
               );
             })}
             {sorted.length === 0 && (
-              <li className="px-4 py-10 text-center text-sm text-muted-foreground italic">
+              <li className="px-4 py-12 text-center mono text-muted-foreground">
                 {emptyMessage ?? "No leads match your filters."}
               </li>
             )}
@@ -144,7 +133,7 @@ export function QueueView({ leads, onStartCall, presorted, emptyMessage, title }
           <LeadDetail
             lead={active}
             inline
-            backLabel="Queue"
+            backLabel="[ QUEUE ]"
             onClose={() => setMobileOpen(false)}
             onStartCall={onStartCall}
           />
