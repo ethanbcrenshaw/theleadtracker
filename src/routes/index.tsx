@@ -177,11 +177,13 @@ function Dashboard() {
 
         {/* masthead */}
         <div className="relative max-w-[1500px] mx-auto px-8 pt-14 pb-16 border-b border-border overflow-hidden">
-          <Botanical
-            variant="masthead"
-            className="pointer-events-none absolute top-0 bottom-0 right-4 h-full w-[22rem] hidden md:block"
-            opacity={0.13}
-          />
+          <div
+            aria-hidden
+            className="pointer-events-none hidden md:block"
+            style={{ position: "absolute", top: 0, bottom: 0, right: "1rem", width: "22rem" }}
+          >
+            <Botanical variant="masthead" className="h-full w-full" opacity={0.13} />
+          </div>
           <div className="relative mono text-muted-foreground">CRM — LOCAL BUSINESS OUTREACH — 2026</div>
           <div className="relative mt-6 grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-10 items-end">
             <h1 className="font-display font-normal text-foreground lowercase tracking-tight leading-[0.95] text-[clamp(4rem,11vw,7rem)]">
