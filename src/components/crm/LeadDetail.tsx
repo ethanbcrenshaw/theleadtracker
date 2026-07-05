@@ -1,10 +1,11 @@
-import { X, MapPin, Calendar, Sparkles, ExternalLink, User, Mic, Video, ArrowLeft, PhoneCall, Voicemail, CalendarClock, CheckCircle2, XCircle } from "lucide-react";
+import { X, ArrowLeft, PhoneCall, Voicemail, Video, CalendarClock, CheckCircle2, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Lead, LeadStatus, WebsiteOpportunity } from "@/lib/types";
 import { useLeads } from "@/lib/store";
 import { StatusBadge } from "./Badges";
-import { formatDate, pitchAngle, sourceLinks, qualityFromOpportunity } from "@/lib/crm-utils";
+import { formatDate, pitchAngle, sourceLinks } from "@/lib/crm-utils";
+import { AddLeadSheet } from "./AddLeadSheet";
 
 interface Props {
   lead: Lead | null;
@@ -32,13 +33,6 @@ function opportunityShort(op: WebsiteOpportunity): string {
   }
 }
 
-function opportunityTagColors(op: WebsiteOpportunity): { bg: string; text: string } {
-  const q = qualityFromOpportunity(op);
-  if (q === "High") return { bg: "oklch(0.88 0.05 45)", text: "oklch(0.38 0.12 40)" };
-  if (q === "Medium") return { bg: "oklch(0.90 0.04 80)", text: "oklch(0.40 0.05 55)" };
-  return { bg: "oklch(0.91 0.02 80)", text: "oklch(0.35 0.01 60)" };
-}
-
 function addDaysISO(days: number): string {
   const d = new Date();
   d.setDate(d.getDate() + days);
@@ -61,25 +55,22 @@ export function LeadDetail({ lead, onClose, onStartCall, inline, backLabel }: Pr
   if (inline) {
     if (!lead) {
       return (
-        <div className="h-full grid place-items-center text-sm text-muted-foreground italic p-8 text-center">
-          Select a lead from the list to see details.
+        <div className="h-full grid place-items-center mono text-muted-foreground p-8 text-center">
+          — select a lead from the list —
         </div>
       );
     }
     return (
       <div className="h-full overflow-y-auto">
-        <div className="sticky top-0 bg-background/90 backdrop-blur border-b border-border px-6 py-4 flex items-center justify-between z-10">
-          <div className="flex items-center gap-2 min-w-0">
+        <div className="sticky top-0 bg-background/95 backdrop-blur border-b border-border px-6 py-4 flex items-center justify-between z-10">
+          <div className="flex items-center gap-3 min-w-0">
             {backLabel && (
-              <button
-                onClick={onClose}
-                className="lg:hidden inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-secondary text-sm text-foreground"
-              >
-                <ArrowLeft className="h-4 w-4" /> {backLabel}
+              <button onClick={onClose} className="mono lg:hidden ink-link">
+                {backLabel}
               </button>
             )}
-            <span className="text-xs uppercase tracking-wider text-muted-foreground">
-              Lead #{lead.priority}
+            <span className="mono text-muted-foreground">
+              LEAD № {String(lead.priority).padStart(3, "0")}
             </span>
           </div>
         </div>
@@ -104,19 +95,22 @@ export function LeadDetail({ lead, onClose, onStartCall, inline, backLabel }: Pr
         <>
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-foreground/30 backdrop-blur-sm z-40"
+            className="fixed inset-0 bg-background/60 backdrop-blur-sm z-40"
             onClick={onClose}
           />
           <motion.aside
             initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
             transition={{ type: "spring", damping: 28, stiffness: 260 }}
-            className="fixed right-0 top-0 bottom-0 w-full sm:w-[560px] bg-background border-l border-border z-50 overflow-y-auto"
+            className="fixed right-0 top-0 bottom-0 w-full sm:w-[580px] bg-background border-l border-foreground z-50 overflow-y-auto"
           >
-            <div className="sticky top-0 bg-background/90 backdrop-blur border-b border-border px-6 py-4 flex items-center justify-between">
-              <span className="text-xs uppercase tracking-wider text-muted-foreground">Lead #{lead.priority}</span>
-              <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-secondary">
-                <X className="h-4 w-4" />
-              </button>
+            <div className="sticky top-0 bg-background/95 backdrop-blur border-b border-border px-6 py-4 flex items-center justify-between z-10">
+              <span className="mono text-muted-foreground">LEAD № {String(lead.priority).padStart(3, "0")}</span>
+              <div className="flex items-center gap-3">
+                <button onClick={onClose} className="mono text-muted-foreground hover:text-foreground">[ ESC ]</button>
+                <button onClick={onClose} aria-label="Close" className="p-1 hover:bg-foreground/10">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
             <DetailBody
               lead={lead}
@@ -157,11 +151,13 @@ function DetailBody({
   followUp: string;
   setFollowUp: (v: string) => void;
 }) {
+  const [editOpen, setEditOpen] = useState(false);
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-8">
               <LeadHero
                 lead={lead}
                 onStartCall={onStartCall}
+                onEdit={() => setEditOpen(true)}
               />
               <OutcomeActions
                 lead={lead}
@@ -176,110 +172,97 @@ function DetailBody({
               />
 
               {(lead.aiSummary || lead.aiNextAction) && (
-                <div className="rounded-2xl bg-gradient-to-br from-navy/[0.05] to-maroon/[0.05] border border-navy/15 p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-navy text-navy-foreground text-[10px] font-semibold uppercase tracking-wider">
-                      <Sparkles className="h-2.5 w-2.5" /> AI Notes
-                    </span>
-                    <span className="text-[11px] text-muted-foreground">latest call summary</span>
-                  </div>
+                <div className="border-t border-border pt-4">
+                  <div className="mono text-muted-foreground mb-2">— AI Notes · latest call</div>
                   {lead.aiSummary && <p className="text-sm text-foreground/90 leading-relaxed">{lead.aiSummary}</p>}
                   {lead.aiNextAction && (
                     <div className="mt-2 text-xs text-foreground/80">
-                      <span className="font-semibold text-maroon">Next:</span> {lead.aiNextAction}
+                      <span className="mono text-[color:var(--sienna)]">NEXT —</span> {lead.aiNextAction}
                     </div>
                   )}
                 </div>
               )}
 
               {lead.owner && (
-                <div className="rounded-xl bg-gradient-to-br from-maroon/[0.06] to-navy/[0.04] border border-maroon/20 p-4">
-                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-maroon mb-2">
-                    <User className="h-3.5 w-3.5" /> Owner
-                  </div>
-                  <div className="font-display text-xl text-navy">{lead.owner}</div>
+                <div className="border-t border-border pt-4">
+                  <div className="mono text-muted-foreground mb-2">— Owner</div>
+                  <div className="font-display text-2xl text-foreground">{lead.owner}</div>
                   {lead.ownerSource && (
                     <a
                       href={lead.ownerSource.split(/[ ,&]+http/)[0].startsWith("http") ? lead.ownerSource.split(/\s|,/)[0] : "#"}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-navy"
+                      className="mono ink-link mt-2 inline-block"
                     >
-                      <ExternalLink className="h-3 w-3" /> source
+                      [ SOURCE ]
                     </a>
                   )}
                 </div>
               )}
 
-              <div className="rounded-xl bg-card border border-border p-4">
-                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Online Presence</div>
+              <div className="border-t border-border pt-4">
+                <div className="mono text-muted-foreground mb-2">— Online Presence</div>
                 <p className="text-sm text-foreground/90">{lead.onlinePresence}</p>
-                <div className="flex flex-wrap gap-1 mt-3">
+                <div className="flex flex-wrap gap-1.5 mt-3">
                   {lead.sources.map((s) => (
-                    <span key={s} className="px-2 py-0.5 rounded-full bg-secondary border border-border text-[11px]">{s}</span>
+                    <span key={s} className="mono border border-border px-1.5 py-1 text-muted-foreground">{s}</span>
                   ))}
                 </div>
               </div>
 
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-2">
-                  <ExternalLink className="h-3.5 w-3.5" /> Find Them Online
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="border-t border-border pt-4">
+                <div className="mono text-muted-foreground mb-2">— Find Them Online</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 border-t border-border">
                   {sourceLinks(lead).map((link) => (
                     <a
                       key={link.source + link.url}
                       href={link.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="group flex items-center justify-between gap-2 rounded-xl bg-card border border-border px-3 py-2.5 hover:border-navy/40 hover:bg-tan/10 transition-colors"
+                      className="flex items-center justify-between gap-2 border-b border-r border-border px-3 py-3 hover:bg-foreground/[0.04] transition-colors"
                     >
                       <div className="min-w-0">
                         <div className="text-sm font-medium text-foreground truncate">{link.label}</div>
-                        <div className="text-[11px] text-muted-foreground truncate">{link.domain}</div>
+                        <div className="mono text-muted-foreground truncate">{link.domain}</div>
                       </div>
-                      <ExternalLink className="h-3.5 w-3.5 text-muted-foreground group-hover:text-navy shrink-0" />
+                      <span className="mono text-muted-foreground">[ OPEN ]</span>
                     </a>
                   ))}
                 </div>
-                <div className="text-[11px] text-muted-foreground italic mt-2">
-                  Links search by business name + city — opens the most likely profile.
+                <div className="mono text-muted-foreground mt-2">
+                  Links search by business + city — opens the most likely profile.
                 </div>
               </div>
 
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Manual Follow-Up Override</div>
-                </div>
+              <div className="border-t border-border pt-4">
+                <div className="mono text-muted-foreground mb-2">— Manual Follow-Up Override</div>
                 <div className="flex gap-2">
                   <input
                     type="date"
                     value={followUp}
                     onChange={(e) => setFollowUp(e.target.value)}
-                    className="flex-1 px-3 py-2 rounded-xl bg-secondary border border-border text-sm"
+                    className="flex-1 px-3 py-2 border border-border bg-transparent text-sm"
                   />
                   <button
                     onClick={() => updateLead(lead.id, { nextFollowUp: followUp ? new Date(followUp).toISOString() : undefined })}
-                    className="px-3 py-2 rounded-xl bg-navy text-navy-foreground text-xs font-medium hover:opacity-90"
+                    className="mono px-4 py-2 bg-foreground text-background hover:opacity-90"
                   >
-                    Save
+                    [ SAVE ]
                   </button>
                 </div>
               </div>
 
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-2">
-                  <Calendar className="h-3.5 w-3.5" /> Contact History
-                </div>
+              <div className="border-t border-border pt-4">
+                <div className="mono text-muted-foreground mb-3">— Contact History</div>
                 {lead.history.length === 0 ? (
-                  <div className="text-sm text-muted-foreground italic">No contact yet — start with a call.</div>
+                  <div className="mono text-muted-foreground">— no contact yet — start with a call —</div>
                 ) : (
                   <div className="space-y-2">
                     {[...lead.history].reverse().map((h) => (
-                      <div key={h.id} className="rounded-xl bg-card border border-border p-3">
+                      <div key={h.id} className="border border-border p-3">
                         <div className="flex items-center justify-between">
                           <StatusBadge s={h.status} />
-                          <span className="text-xs text-muted-foreground">{formatDate(h.date)}</span>
+                          <span className="mono text-muted-foreground">{formatDate(h.date)}</span>
                         </div>
                         {h.note && <p className="text-xs text-foreground/80 mt-1">{h.note}</p>}
                       </div>
@@ -289,20 +272,18 @@ function DetailBody({
               </div>
 
               {lead.callRecords && lead.callRecords.length > 0 && (
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-2">
-                    <Mic className="h-3.5 w-3.5" /> Call Recordings & Summaries
-                  </div>
+                <div className="border-t border-border pt-4">
+                  <div className="mono text-muted-foreground mb-3">— Call Recordings & Summaries</div>
                   <div className="space-y-2">
                     {[...lead.callRecords].reverse().map((c) => (
-                      <details key={c.id} className="rounded-xl bg-card border border-border p-3">
+                      <details key={c.id} className="border border-border p-3">
                         <summary className="cursor-pointer flex items-center justify-between">
                           <span className="text-sm font-medium text-foreground">{c.outcome}</span>
-                          <span className="text-xs text-muted-foreground">{formatDate(c.createdAt)}</span>
+                          <span className="mono text-muted-foreground">{formatDate(c.createdAt)}</span>
                         </summary>
                         {c.summary && <p className="mt-2 text-sm text-foreground/90">{c.summary}</p>}
                         {c.nextAction && (
-                          <p className="mt-1 text-xs text-foreground/80"><span className="font-semibold text-maroon">Next:</span> {c.nextAction}</p>
+                          <p className="mt-1 text-xs text-foreground/80"><span className="mono text-[color:var(--sienna)]">NEXT —</span> {c.nextAction}</p>
                         )}
                         {c.transcript && (
                           <pre className="mt-2 text-[11px] text-muted-foreground whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">{c.transcript}</pre>
@@ -312,64 +293,60 @@ function DetailBody({
                   </div>
                 </div>
               )}
+      <AddLeadSheet mode="edit" lead={lead} open={editOpen} onOpenChange={setEditOpen} />
     </div>
   );
 }
 
-function LeadHero({ lead, onStartCall }: { lead: Lead; onStartCall?: (lead: Lead) => void }) {
-  const tag = opportunityTagColors(lead.websiteOpportunity);
+function LeadHero({ lead, onStartCall, onEdit }: { lead: Lead; onStartCall?: (lead: Lead) => void; onEdit?: () => void }) {
   return (
-    <div className="space-y-4">
-      <div className="flex items-start gap-3">
-        <div
-          className="h-12 w-12 shrink-0 rounded-full grid place-items-center font-display text-lg font-semibold"
-          style={{ backgroundColor: tag.bg, color: tag.text }}
-        >
-          {initials(lead.business)}
+    <div className="space-y-5">
+      <div>
+        <div className="mono text-muted-foreground">— Contact</div>
+        <h2 className="font-display text-4xl sm:text-5xl text-foreground leading-none mt-2 break-words">
+          {lead.business}
+        </h2>
+        <div className="mono text-muted-foreground mt-3">
+          {lead.city.toUpperCase()}, {lead.state.toUpperCase()}
         </div>
-        <div className="min-w-0 flex-1">
-          <h2 className="font-display text-2xl sm:text-3xl font-medium text-foreground leading-tight truncate">{lead.business}</h2>
-          <div className="flex items-center gap-1.5 text-sm text-muted-foreground mt-0.5">
-            <MapPin className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">{lead.city}, {lead.state}</span>
-          </div>
-        </div>
-        <div className="shrink-0 flex flex-col items-end gap-1">
+        <div className="flex items-center gap-3 mt-3">
           <StatusBadge s={lead.status} />
           {lead.zoomBooked && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-maroon text-maroon-foreground text-[10px] font-medium">
-              <Video className="h-3 w-3" /> Zoom {lead.zoomDate ? formatDate(lead.zoomDate) : "booked"}
+            <span className="mono border border-[color:var(--sienna)] text-[color:var(--sienna)] px-1.5 py-1">
+              ZOOM {lead.zoomDate ? formatDate(lead.zoomDate).toUpperCase() : "BOOKED"}
             </span>
           )}
         </div>
       </div>
 
-      <div className="space-y-2">
-        <span
-          className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide"
-          style={{ backgroundColor: tag.bg, color: tag.text }}
-        >
-          {opportunityShort(lead.websiteOpportunity)}
-        </span>
-        <p className="text-sm text-foreground/85 leading-relaxed">{pitchAngle(lead)}</p>
+      <div className="border-t border-border pt-4">
+        <div className="mono text-muted-foreground mb-2">— Opportunity</div>
+        <div className="mono text-foreground">{opportunityShort(lead.websiteOpportunity).toUpperCase()}</div>
+        <p className="text-sm text-foreground/85 leading-relaxed mt-2">{pitchAngle(lead)}</p>
       </div>
 
       <a
         href={`tel:${lead.phone}`}
-        className="flex items-center justify-center gap-3 w-full rounded-2xl bg-maroon text-maroon-foreground py-4 px-5 shadow-soft hover:opacity-95 active:opacity-90 transition-opacity"
+        className="flex items-center justify-center gap-3 w-full border border-foreground bg-foreground text-background py-4 px-5 hover:opacity-95 transition-opacity"
       >
-        <PhoneCall className="h-5 w-5" />
-        <span className="font-mono text-lg sm:text-xl font-medium tracking-wide">{lead.phone}</span>
+        <PhoneCall className="h-4 w-4" />
+        <span className="font-mono text-lg sm:text-xl tracking-wide">{lead.phone}</span>
       </a>
 
-      {onStartCall && (
-        <button
-          onClick={() => onStartCall(lead)}
-          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-navy text-navy-foreground text-xs font-medium hover:opacity-90"
-        >
-          <Mic className="h-3.5 w-3.5" /> Start Call Assistant
-        </button>
-      )}
+      <div className="flex items-center gap-5">
+        {onStartCall && (
+          <button onClick={() => onStartCall(lead)} className="mono ink-link">
+            [ CALL ASSISTANT ]
+          </button>
+        )}
+        {onEdit && (
+          <button onClick={onEdit} className="mono ink-link">
+            [ EDIT ]
+          </button>
+        )}
+      </div>
+      {/* silence unused initials import */}
+      <span className="hidden">{initials(lead.business)}</span>
     </div>
   );
 }
@@ -441,33 +418,37 @@ function OutcomeActions({
     setPickerFor(null);
   };
 
-  const buttons: { key: OutcomeKey; label: string; icon: typeof PhoneCall; classes: string; onClick: () => void }[] = [
-    { key: "called", label: "Called", icon: PhoneCall, classes: "bg-navy text-navy-foreground", onClick: () => apply("called") },
-    { key: "voicemail", label: "Voicemail", icon: Voicemail, classes: "bg-secondary text-secondary-foreground", onClick: () => apply("voicemail") },
-    { key: "callback", label: "Callback", icon: CalendarClock, classes: "bg-gold text-gold-foreground", onClick: () => setPickerFor("callback") },
-    { key: "zoom", label: "Zoom booked", icon: Video, classes: "bg-sage text-sage-foreground", onClick: () => setPickerFor("zoom") },
-    { key: "notInterested", label: "Not interested", icon: XCircle, classes: "bg-clay/20 text-clay", onClick: () => apply("notInterested") },
-    { key: "sold", label: "Sold", icon: CheckCircle2, classes: "bg-sage text-sage-foreground", onClick: () => apply("sold") },
+  const buttons: { key: OutcomeKey; label: string; icon: typeof PhoneCall; primary?: boolean; onClick: () => void }[] = [
+    { key: "called", label: "Called", icon: PhoneCall, primary: true, onClick: () => apply("called") },
+    { key: "voicemail", label: "Voicemail", icon: Voicemail, onClick: () => apply("voicemail") },
+    { key: "callback", label: "Callback", icon: CalendarClock, onClick: () => setPickerFor("callback") },
+    { key: "zoom", label: "Zoom booked", icon: Video, onClick: () => setPickerFor("zoom") },
+    { key: "notInterested", label: "Not interested", icon: XCircle, onClick: () => apply("notInterested") },
+    { key: "sold", label: "Sold", icon: CheckCircle2, onClick: () => apply("sold") },
   ];
 
   return (
-    <div className="space-y-2">
-      <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Log Outcome</div>
+    <div className="border-t border-border pt-4 space-y-3">
+      <div className="mono text-muted-foreground">— Log Outcome</div>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         {buttons.map((b) => (
           <button
             key={b.key}
             onClick={b.onClick}
-            className={`inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium hover:opacity-90 transition-opacity ${b.classes}`}
+            className={`mono inline-flex items-center justify-center gap-1.5 px-3 py-3 border transition-colors ${
+              b.primary
+                ? "bg-foreground text-background border-foreground hover:opacity-90"
+                : "border-border hover:border-foreground text-foreground"
+            }`}
           >
-            <b.icon className="h-4 w-4" />
+            <b.icon className="h-3.5 w-3.5" />
             {b.label}
           </button>
         ))}
       </div>
       {pickerFor && (
-        <div className="mt-2 rounded-xl border border-border bg-card p-3 space-y-2">
-          <div className="text-xs font-medium text-foreground">
+        <div className="mt-2 border border-foreground bg-card p-3 space-y-2">
+          <div className="mono text-muted-foreground">
             Pick {pickerFor === "zoom" ? "Zoom" : "callback"} date
           </div>
           <div className="flex gap-2">
@@ -475,19 +456,13 @@ function OutcomeActions({
               type="date"
               value={pickedDate}
               onChange={(e) => setPickedDate(e.target.value)}
-              className="flex-1 px-3 py-2 rounded-lg bg-secondary border border-border text-sm pointer-events-auto"
+              className="flex-1 px-3 py-2 border border-border bg-transparent text-sm"
             />
-            <button
-              onClick={confirmPicker}
-              className="px-3 py-2 rounded-lg bg-navy text-navy-foreground text-xs font-medium hover:opacity-90"
-            >
-              Confirm
+            <button onClick={confirmPicker} className="mono px-4 py-2 bg-foreground text-background hover:opacity-90">
+              [ CONFIRM ]
             </button>
-            <button
-              onClick={() => setPickerFor(null)}
-              className="px-3 py-2 rounded-lg bg-secondary border border-border text-xs hover:bg-tan/15"
-            >
-              Cancel
+            <button onClick={() => setPickerFor(null)} className="mono px-4 py-2 border border-border hover:border-foreground">
+              [ CANCEL ]
             </button>
           </div>
         </div>
@@ -508,10 +483,10 @@ function NotesBlock({
   addNote: (id: string, note: string) => void;
 }) {
   return (
-    <div className="space-y-2">
-      <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Notes</div>
+    <div className="border-t border-border pt-4 space-y-3">
+      <div className="mono text-muted-foreground">— Notes</div>
       {lead.notes && (
-        <div className="rounded-xl bg-secondary border border-border p-3 text-sm whitespace-pre-wrap">
+        <div className="border border-border p-3 text-sm whitespace-pre-wrap bg-card">
           {lead.notes}
         </div>
       )}
@@ -520,18 +495,18 @@ function NotesBlock({
         onChange={(e) => setNote(e.target.value)}
         placeholder="Add a note about this call…"
         rows={3}
-        className="w-full px-3 py-2 rounded-xl bg-card border border-border text-sm resize-none"
+        className="w-full px-3 py-2 border border-border bg-transparent text-sm resize-none focus:outline-none focus:border-foreground"
       />
       <div className="flex items-center justify-between gap-3">
-        <div className="text-[11px] text-muted-foreground">
-          Last contact: <span className="text-foreground">{lead.lastContacted ? formatDate(lead.lastContacted) : "never"}</span>
+        <div className="mono text-muted-foreground">
+          Last contact — {lead.lastContacted ? formatDate(lead.lastContacted) : "never"}
         </div>
         <button
           onClick={() => { if (note.trim()) { addNote(lead.id, note.trim()); setNote(""); } }}
           disabled={!note.trim()}
-          className="px-3 py-1.5 rounded-lg bg-navy text-navy-foreground text-xs font-medium hover:opacity-90 disabled:opacity-40"
+          className="mono px-4 py-2 bg-foreground text-background hover:opacity-90 disabled:opacity-40"
         >
-          Save note
+          [ SAVE NOTE ]
         </button>
       </div>
     </div>
