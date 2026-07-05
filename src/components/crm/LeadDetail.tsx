@@ -70,7 +70,7 @@ export function LeadDetail({ lead, onClose, onStartCall, inline, backLabel }: Pr
               </button>
             )}
             <span className="mono text-muted-foreground">
-              LEAD № {String(lead.priority).padStart(3, "0")}
+              RANK {String(lead.priority).padStart(3, "0")}
             </span>
           </div>
         </div>
