@@ -1,4 +1,4 @@
-import { Eye, Pencil, ChevronDown, Mic, ArrowUp, ArrowDown } from "lucide-react";
+import { ChevronDown, ArrowUp, ArrowDown } from "lucide-react";
 import type { Lead, LeadStatus, Quality } from "@/lib/types";
 import { QualityBadge, StatusBadge } from "./Badges";
 import { formatDate, isValidContactDate, relativeFollowUp, STATUSES } from "@/lib/crm-utils";
@@ -17,12 +17,8 @@ interface Props {
 function FollowUpPill({ iso, lastContacted }: { iso?: string; lastContacted?: string }) {
   const r = relativeFollowUp(iso, lastContacted);
   if (!r) return <span className="text-muted-foreground">—</span>;
-  const tone =
-    r.tone === "overdue" ? "bg-clay/15 text-clay" :
-    r.tone === "today" ? "bg-gold/30 text-gold-foreground" :
-    r.tone === "soon" ? "bg-tan/30 text-tan-foreground" :
-    "bg-muted text-muted-foreground";
-  return <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium ${tone}`}>{r.label}</span>;
+  const cls = r.tone === "overdue" ? "text-[color:var(--sienna)]" : "text-foreground";
+  return <span className={`mono ${cls}`}>{r.label}</span>;
 }
 
 type SortKey = "priority" | "business" | "city" | "quality" | "status" | "lastContacted" | "nextFollowUp";
@@ -130,14 +126,14 @@ export function LeadTable({ leads, selected, toggleSelect, toggleAll, onView, on
   };
 
   return (
-    <div className="rounded-2xl bg-card border border-border shadow-soft overflow-hidden">
+    <div className="border border-border bg-card">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-secondary/60 backdrop-blur-sm z-10">
-            <tr className="text-left text-[11px] uppercase tracking-wider text-muted-foreground">
-              <th className="pl-4 py-3 w-8">
+          <thead className="sticky top-0 bg-card z-10">
+            <tr className="text-left mono text-muted-foreground border-b-2 border-foreground/60">
+              <th className="pl-5 py-3 w-8">
                 <input type="checkbox" checked={allChecked} onChange={toggleAll}
-                  className="rounded border-border accent-navy" />
+                  className="rounded-none border-border accent-foreground" />
               </th>
               <th className="py-3 px-2">
                 <SortHeader label="#" sortKey="priority" active={sort.key} dir={sort.dir} onClick={toggleSort} />
@@ -149,7 +145,7 @@ export function LeadTable({ leads, selected, toggleSelect, toggleAll, onView, on
                 <SortHeader label="City" sortKey="city" active={sort.key} dir={sort.dir} onClick={toggleSort} />
               </th>
               <th className="py-3 px-2">Phone</th>
-              <th className="py-3 px-2">Online Presence</th>
+              <th className="py-3 px-2">Presence</th>
               <th className="py-3 px-2">Opportunity</th>
               <th className="py-3 px-2">
                 <SortHeader label="Quality" sortKey="quality" active={sort.key} dir={sort.dir} onClick={toggleSort} />
@@ -163,48 +159,48 @@ export function LeadTable({ leads, selected, toggleSelect, toggleAll, onView, on
               <th className="py-3 px-2">
                 <SortHeader label="Follow-up" sortKey="nextFollowUp" active={sort.key} dir={sort.dir} onClick={toggleSort} />
               </th>
-              <th className="py-3 px-2 pr-4">Actions</th>
+              <th className="py-3 px-2 pr-5 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
             {sorted.map((l, idx) => (
               <tr
                 key={l.id}
-                className={`border-t border-border/60 hover:bg-secondary/40 transition-colors ${
-                  idx % 2 === 1 ? "bg-secondary/20" : ""
-                } ${selected.has(l.id) ? "bg-tan/10" : ""}`}
+                className={`border-t border-border hover:bg-foreground/[0.03] transition-colors ${
+                  selected.has(l.id) ? "bg-foreground/[0.04]" : ""
+                }`}
               >
-                <td className="pl-4 py-3">
+                <td className="pl-5 py-4">
                   <input type="checkbox" checked={selected.has(l.id)}
                     onChange={() => toggleSelect(l.id)}
-                    className="rounded border-border accent-navy" />
+                    className="rounded-none border-border accent-foreground" />
                 </td>
-                <td className="py-3 px-2 text-muted-foreground font-mono text-xs">{l.priority}</td>
-                <td className="py-3 px-2">
-                  <button onClick={() => onView(l)} className="font-medium text-foreground hover:text-navy text-left">
+                <td className="py-4 px-2 mono text-muted-foreground">{String(idx + 1).padStart(3, "0")}</td>
+                <td className="py-4 px-2">
+                  <button onClick={() => onView(l)} className="font-display text-lg text-foreground hover:underline underline-offset-4 text-left leading-tight">
                     {l.business}
                   </button>
                   {l.owner && (
-                    <div className="text-[11px] text-muted-foreground mt-0.5">
-                      <span className="text-maroon">●</span> {l.owner}
+                    <div className="mono text-muted-foreground mt-1">
+                      {l.owner}
                     </div>
                   )}
                   {l.ownerNote && (
-                    <div className="text-[11px] text-tan-foreground/80 mt-0.5">{l.ownerNote}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5 italic">{l.ownerNote}</div>
                   )}
                 </td>
-                <td className="py-3 px-2 text-muted-foreground">{l.city}, {l.state}</td>
-                <td className="py-3 px-2">
-                  <a href={`tel:${l.phone}`} className="text-navy hover:underline font-mono text-xs">{l.phone}</a>
+                <td className="py-4 px-2 mono text-muted-foreground">{l.city}, {l.state}</td>
+                <td className="py-4 px-2">
+                  <a href={`tel:${l.phone}`} className="mono ink-link">{l.phone}</a>
                 </td>
-                <td className="py-3 px-2 max-w-[260px]">
+                <td className="py-4 px-2 max-w-[260px]">
                   <span className="text-xs text-muted-foreground line-clamp-2">{l.onlinePresence}</span>
                 </td>
-                <td className="py-3 px-2">
-                  <span className="text-[11px] text-foreground/80">{l.websiteOpportunity}</span>
+                <td className="py-4 px-2">
+                  <span className="mono text-muted-foreground">{l.websiteOpportunity}</span>
                 </td>
-                <td className="py-3 px-2"><QualityBadge q={l.quality} /></td>
-                <td className="py-3 px-2 relative">
+                <td className="py-4 px-2"><QualityBadge q={l.quality} /></td>
+                <td className="py-4 px-2 relative">
                   <button
                     onClick={() => setOpenMenu(openMenu === l.id ? null : l.id)}
                     className="inline-flex items-center gap-1 group"
@@ -215,12 +211,12 @@ export function LeadTable({ leads, selected, toggleSelect, toggleAll, onView, on
                   {openMenu === l.id && (
                     <>
                       <div className="fixed inset-0 z-20" onClick={() => setOpenMenu(null)} />
-                      <div className="absolute z-30 mt-1 right-0 bg-popover border border-border rounded-xl shadow-elev py-1 min-w-[180px]">
+                      <div className="absolute z-30 mt-1 right-0 bg-popover border border-foreground py-1 min-w-[200px]">
                         {STATUSES.map((s) => (
                           <button
                             key={s}
                             onClick={() => { onStatusChange(l.id, s); setOpenMenu(null); }}
-                            className="w-full text-left px-3 py-1.5 text-xs hover:bg-secondary"
+                            className="mono w-full text-left px-3 py-2 hover:bg-foreground/[0.06]"
                           >
                             {s}
                           </button>
@@ -229,31 +225,27 @@ export function LeadTable({ leads, selected, toggleSelect, toggleAll, onView, on
                     </>
                   )}
                 </td>
-                <td className="py-3 px-2 text-xs text-muted-foreground whitespace-nowrap">
-                  {isValidContactDate(l.lastContacted) ? formatDate(l.lastContacted) : <span className="italic text-muted-foreground/70">Never</span>}
+                <td className="py-4 px-2 mono text-muted-foreground whitespace-nowrap">
+                  {isValidContactDate(l.lastContacted) ? formatDate(l.lastContacted) : "NEVER"}
                 </td>
-                <td className="py-3 px-2"><FollowUpPill iso={l.nextFollowUp} lastContacted={l.lastContacted} /></td>
-                <td className="py-3 px-2 pr-4">
-                  <div className="flex items-center gap-1">
+                <td className="py-4 px-2"><FollowUpPill iso={l.nextFollowUp} lastContacted={l.lastContacted} /></td>
+                <td className="py-4 px-2 pr-5">
+                  <div className="flex items-center gap-3 justify-end">
                     {onCall && (
-                      <button onClick={() => onCall(l)}
-                        className="p-1.5 rounded-lg hover:bg-maroon/10 text-maroon" title="Start Call Assistant">
-                        <Mic className="h-4 w-4" />
+                      <button onClick={() => onCall(l)} className="mono text-muted-foreground hover:text-foreground" title="Start Call Assistant">
+                        [ CALL ]
                       </button>
                     )}
-                    <button onClick={() => onView(l)} className="p-1.5 rounded-lg hover:bg-secondary" title="View">
-                      <Eye className="h-4 w-4 text-muted-foreground" />
-                    </button>
-                    <button onClick={() => onView(l)} className="p-1.5 rounded-lg hover:bg-secondary" title="Edit">
-                      <Pencil className="h-4 w-4 text-muted-foreground" />
+                    <button onClick={() => onView(l)} className="mono text-muted-foreground hover:text-foreground" title="View">
+                      [ VIEW ]
                     </button>
                   </div>
                 </td>
               </tr>
             ))}
             {sorted.length === 0 && (
-              <tr><td colSpan={12} className="text-center py-12 text-muted-foreground">
-                No leads match these filters. Try clearing a chip.
+              <tr><td colSpan={12} className="text-center py-16 mono text-muted-foreground">
+                — no leads match these filters —
               </td></tr>
             )}
           </tbody>
