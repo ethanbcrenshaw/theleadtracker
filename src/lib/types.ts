@@ -67,6 +67,7 @@ export interface LeadEnrichment {
   hours?: string;
   ownerName?: string;
   recentActivity?: string;
+  pitchAngle?: string;
   enrichedAt: string; // ISO
 }
 
