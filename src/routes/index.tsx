@@ -18,6 +18,7 @@ import { AddLeadSheet } from "@/components/crm/AddLeadSheet";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Botanical, BotanicalDivider } from "@/components/crm/Botanical";
 import { TodayView, type TodayItem } from "@/components/crm/TodayView";
+import { DailyBriefing } from "@/components/crm/DailyBriefing";
 import type { Lead } from "@/lib/types";
 
 export const Route = createFileRoute("/")({
@@ -58,6 +59,7 @@ function Dashboard() {
   );
   const setActive = (l: Lead | null) => setActiveId(l ? l.id : null);
   const [aiOpen, setAiOpen] = useState(false);
+  const [aiPrefill, setAiPrefill] = useState<{ industry?: string; city?: string }>({});
   const [callLead, setCallLead] = useState<Lead | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [addOpen, setAddOpen] = useState(false);
@@ -224,6 +226,25 @@ function Dashboard() {
     return items.slice(0, todayCap);
   }, [searched, startOfToday, endOfToday, todayCap]);
 
+  // Counts used by DailyBriefing's stats block
+  const overdueCount = useMemo(
+    () => todayItems.filter((i) => i.tone === "overdue").length,
+    [todayItems],
+  );
+  const todayScheduledCount = useMemo(
+    () => todayItems.filter((i) => i.tone === "today").length,
+    [todayItems],
+  );
+  const hotFillCount = useMemo(
+    () => todayItems.filter((i) => i.tone === "hot").length,
+    [todayItems],
+  );
+
+  function openAIGenerate(prefill?: { industry?: string; city?: string }) {
+    setAiPrefill(prefill ?? {});
+    setAiOpen(true);
+  }
+
   const countsWithToday = { ...counts, today: todayItems.length };
 
   const dateLine = useMemo(() => {
@@ -368,6 +389,18 @@ function Dashboard() {
             <div className="mono text-muted-foreground">{dateLine}</div>
           </div>
         )}
+        {view === "today" && (
+          <DailyBriefing
+            leads={leads}
+            queuedToday={todayItems.length}
+            overdue={overdueCount}
+            todayScheduled={todayScheduledCount}
+            hotUncalled={hotFillCount}
+            onOpenAIGenerate={openAIGenerate}
+            onOpenLead={(l) => setActive(l)}
+            onJumpToPipeline={() => setView("pipeline")}
+          />
+        )}
         {view === "hot" && (
           <SectionHeader label="Hot, Not Called" count={hotLeads.length} />
         )}
@@ -434,7 +467,15 @@ function Dashboard() {
 
       <LeadDetail lead={active} onClose={() => setActive(null)} onStartCall={setCallLead} />
       <CallAssistant lead={callLead} onClose={() => setCallLead(null)} />
-      <AIGenerateModal open={aiOpen} onClose={() => setAiOpen(false)} />
+        <AIGenerateModal
+          open={aiOpen}
+          onClose={() => {
+            setAiOpen(false);
+            setAiPrefill({});
+          }}
+          initialIndustry={aiPrefill.industry}
+          initialCity={aiPrefill.city}
+        />
       <AddLeadSheet open={addOpen} onOpenChange={setAddOpen} />
       <BulkBar
         count={selected.size}
