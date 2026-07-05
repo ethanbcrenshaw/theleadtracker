@@ -26,10 +26,10 @@ import type { Lead } from "@/lib/types";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Lead Management — Local Business CRM" },
-      { name: "description", content: "Track, prioritize, and follow up with local business leads. A warm, human CRM for solo web designers and small agencies." },
-      { property: "og:title", content: "Lead Management — Local Business CRM" },
-      { property: "og:description", content: "Track, prioritize, and follow up with local business leads." },
+      { title: "lead bloom — local business CRM" },
+      { name: "description", content: "A warm, editorial CRM for solo web designers and small agencies. Track, prioritize, and bloom your leads." },
+      { property: "og:title", content: "lead bloom — local business CRM" },
+      { property: "og:description", content: "Track, prioritize, and bloom your local business leads." },
     ],
     links: [],
   }),
