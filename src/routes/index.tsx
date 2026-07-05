@@ -179,7 +179,7 @@ function Dashboard() {
         <div className="relative max-w-[1500px] mx-auto px-8 pt-14 pb-16 border-b border-border overflow-hidden">
           <Botanical
             variant="masthead"
-            className="pointer-events-none absolute top-0 bottom-0 h-full w-[26rem] hidden md:block"
+            className="pointer-events-none absolute top-0 bottom-0 right-4 h-full w-[22rem] hidden md:block"
             opacity={0.13}
           />
           <div className="relative mono text-muted-foreground">CRM — LOCAL BUSINESS OUTREACH — 2026</div>
