@@ -104,7 +104,7 @@ export function LeadDetail({ lead, onClose, onStartCall, inline, backLabel }: Pr
             className="fixed right-0 top-0 bottom-0 w-full sm:w-[580px] bg-background border-l border-foreground z-50 overflow-y-auto"
           >
             <div className="sticky top-0 bg-background/95 backdrop-blur border-b border-border px-6 py-4 flex items-center justify-between z-10">
-              <span className="mono text-muted-foreground">LEAD № {String(lead.priority).padStart(3, "0")}</span>
+              <span className="mono text-muted-foreground">RANK {String(lead.priority).padStart(3, "0")}</span>
               <div className="flex items-center gap-3">
                 <button onClick={onClose} className="mono text-muted-foreground hover:text-foreground">[ ESC ]</button>
                 <button onClick={onClose} aria-label="Close" className="p-1 hover:bg-foreground/10">
