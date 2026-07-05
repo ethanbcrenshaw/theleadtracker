@@ -3,6 +3,7 @@ import type { Lead, WebsiteOpportunity } from "@/lib/types";
 import { LeadDetail } from "./LeadDetail";
 import { sortLeads } from "./LeadTable";
 import { TagBadge } from "./Badges";
+import { Botanical } from "./Botanical";
 
 interface Props {
   leads: Lead[];
@@ -123,8 +124,8 @@ export function QueueView({ leads, onStartCall, presorted, emptyMessage, title }
               );
             })}
             {sorted.length === 0 && (
-              <li className="px-4 py-12 flex flex-col items-center gap-4 text-center mono text-muted-foreground">
-                <EmptyBotanical />
+              <li className="px-4 py-12 flex flex-col items-center gap-5 text-center mono text-muted-foreground">
+                <Botanical variant="hip" className="h-24 w-20 opacity-90" opacity={0.75} />
                 <div>{emptyMessage ?? "No leads match your filters."}</div>
               </li>
             )}
