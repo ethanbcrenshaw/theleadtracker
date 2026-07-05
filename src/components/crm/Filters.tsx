@@ -21,10 +21,10 @@ function Chip({
   return (
     <button
       onClick={onClick}
-      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+      className={`mono px-2.5 py-1 border transition-colors ${
         active
-          ? "bg-navy text-navy-foreground border-navy shadow-soft"
-          : "bg-card text-muted-foreground border-border hover:border-navy/40 hover:text-foreground"
+          ? "border-foreground bg-foreground text-background"
+          : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/40"
       }`}
     >
       {children}
@@ -35,9 +35,7 @@ function Chip({
 function Group({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80 mr-1">
-        {label}
-      </span>
+      <span className="mono text-muted-foreground min-w-[110px]">— {label}</span>
       {children}
     </div>
   );
@@ -45,10 +43,10 @@ function Group({ label, children }: { label: string; children: React.ReactNode }
 
 export function Filters({ filters, setFilters, cities }: Props) {
   return (
-    <div className="rounded-2xl bg-card border border-border p-4 shadow-soft space-y-3">
+    <div className="border border-border p-5 space-y-3 bg-card">
       <Group label="City">
         <Chip active={filters.city === "All"} onClick={() => setFilters({ ...filters, city: "All" })}>
-          All Cities
+          All
         </Chip>
         {cities.map((c) => (
           <Chip key={c} active={filters.city === c} onClick={() => setFilters({ ...filters, city: c })}>
@@ -68,13 +66,13 @@ export function Filters({ filters, setFilters, cities }: Props) {
           <Chip key={s} active={filters.status === s} onClick={() => setFilters({ ...filters, status: s })}>{s}</Chip>
         ))}
       </Group>
-      <Group label="Website Opportunity">
+      <Group label="Opportunity">
         <Chip active={filters.opportunity === "All"} onClick={() => setFilters({ ...filters, opportunity: "All" })}>All</Chip>
         {OPPORTUNITIES.map((o) => (
           <Chip key={o} active={filters.opportunity === o} onClick={() => setFilters({ ...filters, opportunity: o })}>{o}</Chip>
         ))}
       </Group>
-      <Group label="Lead Source">
+      <Group label="Source">
         <Chip active={filters.source === "All"} onClick={() => setFilters({ ...filters, source: "All" })}>All</Chip>
         {SOURCES.map((s) => (
           <Chip key={s} active={filters.source === s} onClick={() => setFilters({ ...filters, source: s })}>{s}</Chip>
