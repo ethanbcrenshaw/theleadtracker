@@ -21,7 +21,10 @@ export type Database = {
           business: string
           callRecords: Json | null
           city: string
+          confidenceEvidence: Json
+          confidenceScore: number | null
           created_at: string
+          enrichment: Json | null
           history: Json
           id: string
           lastContacted: string | null
@@ -38,6 +41,8 @@ export type Database = {
           state: string
           status: string
           tags: Json
+          unverified: boolean
+          unverifiedReason: string | null
           websiteOpportunity: string
           zoomBooked: boolean | null
           zoomDate: string | null
@@ -48,7 +53,10 @@ export type Database = {
           business?: string
           callRecords?: Json | null
           city?: string
+          confidenceEvidence?: Json
+          confidenceScore?: number | null
           created_at?: string
+          enrichment?: Json | null
           history?: Json
           id: string
           lastContacted?: string | null
@@ -65,6 +73,8 @@ export type Database = {
           state?: string
           status?: string
           tags?: Json
+          unverified?: boolean
+          unverifiedReason?: string | null
           websiteOpportunity?: string
           zoomBooked?: boolean | null
           zoomDate?: string | null
@@ -75,7 +85,10 @@ export type Database = {
           business?: string
           callRecords?: Json | null
           city?: string
+          confidenceEvidence?: Json
+          confidenceScore?: number | null
           created_at?: string
+          enrichment?: Json | null
           history?: Json
           id?: string
           lastContacted?: string | null
@@ -92,6 +105,8 @@ export type Database = {
           state?: string
           status?: string
           tags?: Json
+          unverified?: boolean
+          unverifiedReason?: string | null
           websiteOpportunity?: string
           zoomBooked?: boolean | null
           zoomDate?: string | null
