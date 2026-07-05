@@ -17,6 +17,7 @@ import { CallAssistant } from "@/components/crm/CallAssistant";
 import { AddLeadSheet } from "@/components/crm/AddLeadSheet";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Botanical, BotanicalDivider } from "@/components/crm/Botanical";
+import { TodayView, type TodayItem } from "@/components/crm/TodayView";
 import type { Lead } from "@/lib/types";
 
 export const Route = createFileRoute("/")({
@@ -39,7 +40,17 @@ function Dashboard() {
   const bulkDelete = useLeads((s) => s.bulkDelete);
 
   const [search, setSearch] = useState("");
-  const [view, setView] = useState<SavedView>("hot");
+  const [view, setView] = useState<SavedView>("today");
+  const [todayCap, setTodayCap] = useState<number>(() => {
+    if (typeof window === "undefined") return 10;
+    const v = Number(window.localStorage.getItem("leadbloom.todayCap"));
+    return Number.isFinite(v) && v >= 3 && v <= 50 ? v : 10;
+  });
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("leadbloom.todayCap", String(todayCap));
+    }
+  }, [todayCap]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const active = useMemo(
     () => (activeId ? (leads.find((l) => l.id === activeId) ?? null) : null),
@@ -134,6 +145,7 @@ function Dashboard() {
   }, [searched, filters]);
 
   const counts = {
+    today: 0, // computed below after todayItems
     hot: hotLeads.length,
     followups: followupLeads.length,
     pipeline: pipelineLeads.length,
