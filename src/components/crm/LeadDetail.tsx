@@ -569,3 +569,236 @@ function TagsBlock({
     </div>
   );
 }
+
+// ── Dossier ────────────────────────────────────────────────────────────────
+
+const PROFILE_LABEL: Record<LeadProfileType, string> = {
+  "website": "WEBSITE",
+  "google-business": "GOOGLE BUSINESS",
+  "facebook": "FACEBOOK",
+  "instagram": "INSTAGRAM",
+  "yelp": "YELP",
+  "linkedin": "LINKEDIN",
+  "directory": "DIRECTORY",
+  "other": "OTHER",
+};
+
+const PROFILE_ORDER: LeadProfileType[] = [
+  "website", "google-business", "facebook", "instagram", "yelp", "linkedin", "directory", "other",
+];
+
+function websiteStatusLine(status: LeadEnrichment["websiteStatus"]): { label: string; tone: "warn" | "ok" | "muted" } {
+  switch (status) {
+    case "none": return { label: "NO DEDICATED WEBSITE", tone: "warn" };
+    case "outdated": return { label: "OUTDATED WEBSITE", tone: "warn" };
+    case "good": return { label: "HAS WEBSITE", tone: "ok" };
+    default: return { label: "WEBSITE STATUS UNKNOWN", tone: "muted" };
+  }
+}
+
+function DossierRow({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div className="grid grid-cols-[7.5rem_1fr] gap-3 py-2 border-b border-border last:border-b-0">
+      <div className="mono text-muted-foreground">{label}</div>
+      <div className={`text-sm ${value ? "text-foreground" : "text-muted-foreground italic"}`}>
+        {value || "— not found —"}
+      </div>
+    </div>
+  );
+}
+
+function Dossier({ lead, updateLead }: { lead: Lead; updateLead: (id: string, patch: Partial<Lead>) => void }) {
+  const [researching, setResearching] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const e = lead.enrichment;
+
+  const research = async () => {
+    setResearching(true);
+    setErr(null);
+    try {
+      const res = await fetch("/api/enrich-lead", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadId: lead.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+      // Server already persisted; mirror the same patch into the local store.
+      const u = data.updates as {
+        enrichment?: LeadEnrichment;
+        confidenceScore?: number;
+        confidenceEvidence?: string[];
+        unverified?: boolean;
+        unverifiedReason?: string | null;
+      };
+      updateLead(lead.id, {
+        enrichment: u.enrichment,
+        confidenceScore: u.confidenceScore,
+        confidenceEvidence: u.confidenceEvidence,
+        unverified: u.unverified,
+        unverifiedReason: u.unverifiedReason ?? undefined,
+      });
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : "Research failed");
+    } finally {
+      setResearching(false);
+    }
+  };
+
+  // ── Un-enriched state ──
+  if (!e) {
+    return (
+      <div className="border-t border-border pt-4">
+        <div className="mono text-muted-foreground mb-3">— Dossier</div>
+        <div className="border border-dashed border-border p-5 text-center space-y-3">
+          <div className="mono text-muted-foreground">— not yet researched —</div>
+          <div className="text-xs text-muted-foreground max-w-sm mx-auto">
+            This lead has no enrichment data. Run research to fetch the online-presence map,
+            reviews snapshot, and a tailored pitch angle.
+          </div>
+          <button
+            onClick={research}
+            disabled={researching}
+            className="mono inline-flex items-center gap-2 px-4 py-2 bg-foreground text-background hover:opacity-90 disabled:opacity-60"
+          >
+            {researching
+              ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> RESEARCHING…</>
+              : <><Sparkles className="h-3.5 w-3.5" /> [ RESEARCH NOW ]</>}
+          </button>
+          {err && <div className="mono text-[color:var(--sienna)]">{err}</div>}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Enriched dossier ──
+  const status = websiteStatusLine(e.websiteStatus);
+  const sortedProfiles = [...e.profiles].sort(
+    (a, b) => PROFILE_ORDER.indexOf(a.type) - PROFILE_ORDER.indexOf(b.type),
+  );
+  const conf = lead.confidenceScore;
+  const evidence = lead.confidenceEvidence ?? [];
+
+  return (
+    <div className="border-t border-border pt-4 space-y-6">
+      {/* Section head + re-research */}
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="mono text-muted-foreground">— Dossier</div>
+        <div className="flex items-center gap-3">
+          {e.enrichedAt && (
+            <span className="mono text-muted-foreground text-xs">
+              RESEARCHED {formatDate(e.enrichedAt).toUpperCase()}
+            </span>
+          )}
+          <button
+            onClick={research}
+            disabled={researching}
+            className="mono ink-link"
+            title="Re-run research"
+          >
+            {researching ? "RESEARCHING…" : "[ REFRESH ]"}
+          </button>
+        </div>
+      </div>
+
+      {/* 1. Summary + Confidence */}
+      <div className="space-y-3">
+        {e.verifiedSummary ? (
+          <p className="text-sm text-foreground/90 leading-relaxed">{e.verifiedSummary}</p>
+        ) : (
+          <p className="mono text-muted-foreground italic">— no verified summary available —</p>
+        )}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {typeof conf === "number" && (
+            <span className="mono border border-foreground px-1.5 py-1 text-foreground">
+              CONF {String(conf).padStart(2, "0")}
+            </span>
+          )}
+          {evidence.map((chip, i) => (
+            <span key={i} className="mono border border-border px-1.5 py-1 text-muted-foreground">
+              {chip}
+            </span>
+          ))}
+        </div>
+        {lead.unverified && (
+          <div className="mono text-[color:var(--sienna)] border border-[color:var(--sienna)] px-3 py-2">
+            ⚠ UNVERIFIED — {(lead.unverifiedReason || "review before calling").toUpperCase()}
+          </div>
+        )}
+      </div>
+
+      {/* 2. Online-presence map */}
+      <div>
+        <div className="mono text-muted-foreground mb-2">— Online Presence</div>
+        <div className={`mono mb-3 ${
+          status.tone === "warn" ? "text-[color:var(--sienna)]"
+          : status.tone === "ok" ? "text-foreground"
+          : "text-muted-foreground"
+        }`}>
+          {status.label}
+        </div>
+        {sortedProfiles.length === 0 ? (
+          <div className="mono text-muted-foreground italic">— no profiles discovered —</div>
+        ) : (
+          <ul className="border-t border-border">
+            {sortedProfiles.map((p, i) => (
+              <li key={`${p.type}-${i}`} className="border-b border-border">
+                <a
+                  href={p.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="grid grid-cols-[8rem_1fr_auto] items-center gap-3 px-1 py-2.5 hover:bg-foreground/[0.04]"
+                >
+                  <span className="mono text-muted-foreground">{PROFILE_LABEL[p.type]}</span>
+                  <span className="text-sm text-foreground truncate">
+                    {p.label || p.url}
+                  </span>
+                  <span className="mono text-muted-foreground inline-flex items-center gap-1">
+                    OPEN <ExternalLink className="h-3 w-3" />
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* 3. Reviews / Hours / Owner / Recent Activity */}
+      <div>
+        <div className="mono text-muted-foreground mb-2">— Signals</div>
+        <div className="border-t border-border">
+          <DossierRow
+            label="REVIEWS"
+            value={
+              e.reviews.length
+                ? e.reviews.map((r) => {
+                    const bits = [r.rating ? `${r.rating}★` : null, r.count ? `${r.count} reviews` : null].filter(Boolean).join(" · ");
+                    return `${r.source} — ${bits || "found"}`;
+                  }).join("  ·  ")
+                : null
+            }
+          />
+          <DossierRow label="HOURS" value={e.hours} />
+          <DossierRow label="OWNER" value={e.ownerName} />
+          <DossierRow label="RECENT ACTIVITY" value={e.recentActivity} />
+        </div>
+      </div>
+
+      {/* 4. Pitch angle */}
+      <div>
+        <div className="mono text-muted-foreground mb-2">— Pitch Angle</div>
+        {lead.unverified ? (
+          <p className="mono text-[color:var(--sienna)] leading-relaxed">
+            {e.pitchAngle || `⚠ Poor prospect — ${(lead.unverifiedReason || "unverified").toLowerCase()}. Skip or verify basics before spending call time.`}
+          </p>
+        ) : e.pitchAngle ? (
+          <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">{e.pitchAngle}</p>
+        ) : (
+          <p className="text-sm text-foreground/85 leading-relaxed">{pitchAngle(lead)}</p>
+        )}
+      </div>
+
+      {err && <div className="mono text-[color:var(--sienna)]">{err}</div>}
+    </div>
+  );
+}
