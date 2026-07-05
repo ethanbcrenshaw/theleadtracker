@@ -14,6 +14,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiSummarizeCallRouteImport } from './routes/api/summarize-call'
 import { Route as ApiGenerateLeadsRouteImport } from './routes/api/generate-leads'
 import { Route as ApiEnrichLeadRouteImport } from './routes/api/enrich-lead'
+import { Route as ApiCallScriptRouteImport } from './routes/api/call-script'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
@@ -43,6 +44,11 @@ const ApiEnrichLeadRoute = ApiEnrichLeadRouteImport.update({
   path: '/api/enrich-lead',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCallScriptRoute = ApiCallScriptRouteImport.update({
+  id: '/api/call-script',
+  path: '/api/call-script',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const Char91DotwellKnownChar93OauthProtectedResourceRoute =
   Char91DotwellKnownChar93OauthProtectedResourceRouteImport.update({
     id: '/.well-known/oauth-protected-resource',
@@ -67,6 +73,7 @@ export interface FileRoutesByFullPath {
   '/mcp': typeof McpRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  '/api/call-script': typeof ApiCallScriptRoute
   '/api/enrich-lead': typeof ApiEnrichLeadRoute
   '/api/generate-leads': typeof ApiGenerateLeadsRoute
   '/api/summarize-call': typeof ApiSummarizeCallRoute
@@ -77,6 +84,7 @@ export interface FileRoutesByTo {
   '/mcp': typeof McpRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  '/api/call-script': typeof ApiCallScriptRoute
   '/api/enrich-lead': typeof ApiEnrichLeadRoute
   '/api/generate-leads': typeof ApiGenerateLeadsRoute
   '/api/summarize-call': typeof ApiSummarizeCallRoute
@@ -88,6 +96,7 @@ export interface FileRoutesById {
   '/mcp': typeof McpRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  '/api/call-script': typeof ApiCallScriptRoute
   '/api/enrich-lead': typeof ApiEnrichLeadRoute
   '/api/generate-leads': typeof ApiGenerateLeadsRoute
   '/api/summarize-call': typeof ApiSummarizeCallRoute
@@ -100,6 +109,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
+    | '/api/call-script'
     | '/api/enrich-lead'
     | '/api/generate-leads'
     | '/api/summarize-call'
@@ -110,6 +120,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
+    | '/api/call-script'
     | '/api/enrich-lead'
     | '/api/generate-leads'
     | '/api/summarize-call'
@@ -120,6 +131,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
+    | '/api/call-script'
     | '/api/enrich-lead'
     | '/api/generate-leads'
     | '/api/summarize-call'
@@ -131,6 +143,7 @@ export interface RootRouteChildren {
   McpRoute: typeof McpRoute
   Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
+  ApiCallScriptRoute: typeof ApiCallScriptRoute
   ApiEnrichLeadRoute: typeof ApiEnrichLeadRoute
   ApiGenerateLeadsRoute: typeof ApiGenerateLeadsRoute
   ApiSummarizeCallRoute: typeof ApiSummarizeCallRoute
@@ -174,6 +187,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiEnrichLeadRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/call-script': {
+      id: '/api/call-script'
+      path: '/api/call-script'
+      fullPath: '/api/call-script'
+      preLoaderRoute: typeof ApiCallScriptRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/.well-known/oauth-protected-resource': {
       id: '/.well-known/oauth-protected-resource'
       path: '/.well-known/oauth-protected-resource'
@@ -204,6 +224,7 @@ const rootRouteChildren: RootRouteChildren = {
   Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
   Char91DotwellKnownChar93OauthProtectedResourceRoute:
     Char91DotwellKnownChar93OauthProtectedResourceRoute,
+  ApiCallScriptRoute: ApiCallScriptRoute,
   ApiEnrichLeadRoute: ApiEnrichLeadRoute,
   ApiGenerateLeadsRoute: ApiGenerateLeadsRoute,
   ApiSummarizeCallRoute: ApiSummarizeCallRoute,
