@@ -179,8 +179,8 @@ function Dashboard() {
         <div className="relative max-w-[1500px] mx-auto px-8 pt-14 pb-16 border-b border-border overflow-hidden">
           <Botanical
             variant="masthead"
-            className="absolute right-0 top-0 h-[130%] w-[38%] -mr-8 -mt-6 hidden md:block"
-            opacity={0.14}
+            className="pointer-events-none absolute top-0 bottom-0 h-full w-[26rem] hidden md:block"
+            opacity={0.13}
           />
           <div className="relative mono text-muted-foreground">CRM — LOCAL BUSINESS OUTREACH — 2026</div>
           <div className="relative mt-6 grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-10 items-end">
