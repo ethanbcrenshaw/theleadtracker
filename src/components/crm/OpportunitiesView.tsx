@@ -13,36 +13,37 @@ const HINTS: Record<string, string> = {
 
 export function OpportunitiesView({ leads, onView }: { leads: Lead[]; onView: (l: Lead) => void }) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-8">
       {OPPORTUNITIES.map((op) => {
         const items = leads.filter((l) => l.websiteOpportunity === op);
         if (items.length === 0) return null;
         return (
-          <div key={op} className="rounded-2xl bg-card border border-border shadow-soft overflow-hidden">
-            <div className="px-5 py-3 bg-secondary/50 border-b border-border flex items-center justify-between">
+          <section key={op}>
+            <div className="border-b border-border pb-3 flex items-end justify-between">
               <div>
-                <h3 className="font-display text-lg text-foreground">{op}</h3>
-                <p className="text-xs text-muted-foreground">{HINTS[op]}</p>
+                <div className="mono text-muted-foreground">— Collection</div>
+                <h3 className="font-display text-3xl text-foreground lowercase mt-1">{op.toLowerCase()}</h3>
+                <p className="mono text-muted-foreground mt-2">{HINTS[op]}</p>
               </div>
-              <span className="text-xs font-mono text-muted-foreground">{items.length} leads</span>
+              <span className="mono text-muted-foreground">{String(items.length).padStart(3, "0")}</span>
             </div>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 p-3">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-0 border-b border-border">
               {items.map((l) => (
                 <button
                   key={l.id}
                   onClick={() => onView(l)}
-                  className="text-left rounded-xl bg-background border border-border p-3 hover:border-navy/40 transition-all"
+                  className="text-left border-r border-b border-border p-4 hover:bg-foreground/[0.03] transition-colors"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-sm truncate">{l.business}</span>
+                    <span className="font-display text-lg truncate">{l.business}</span>
                     <QualityBadge q={l.quality} />
                   </div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{l.city}, {l.state}</div>
-                  <div className="mt-2"><StatusBadge s={l.status} /></div>
+                  <div className="mono text-muted-foreground mt-1.5">{l.city}, {l.state}</div>
+                  <div className="mt-3"><StatusBadge s={l.status} /></div>
                 </button>
               ))}
             </div>
-          </div>
+          </section>
         );
       })}
     </div>
