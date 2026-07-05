@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { CallRecord, Lead, LeadStatus } from "./types";
+import type { CallRecord, Lead, LeadEnrichment, LeadStatus } from "./types";
 import { seedLeads } from "@/data/seed";
 import { qualityFromOpportunity } from "./crm-utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -52,6 +52,11 @@ type LeadRow = {
   aiNextAction: string | null;
   zoomBooked: boolean | null;
   zoomDate: string | null;
+  confidenceScore: number | null;
+  confidenceEvidence: string[] | null;
+  unverified: boolean | null;
+  unverifiedReason: string | null;
+  enrichment: LeadEnrichment | null;
   created_at?: string;
 };
 
@@ -82,6 +87,11 @@ function rowToLead(r: LeadRow): Lead {
   if (r.aiNextAction != null) l.aiNextAction = r.aiNextAction;
   if (r.zoomBooked != null) l.zoomBooked = r.zoomBooked;
   if (r.zoomDate != null) l.zoomDate = r.zoomDate;
+  if (r.confidenceScore != null) l.confidenceScore = r.confidenceScore;
+  if (r.confidenceEvidence != null) l.confidenceEvidence = r.confidenceEvidence;
+  if (r.unverified != null) l.unverified = r.unverified;
+  if (r.unverifiedReason != null) l.unverifiedReason = r.unverifiedReason;
+  if (r.enrichment != null) l.enrichment = r.enrichment;
   return sanitizeLead(l);
 }
 
@@ -111,6 +121,11 @@ function leadToRow(l: Lead): LeadRow {
     aiNextAction: l.aiNextAction ?? null,
     zoomBooked: l.zoomBooked ?? null,
     zoomDate: l.zoomDate ?? null,
+    confidenceScore: l.confidenceScore ?? null,
+    confidenceEvidence: l.confidenceEvidence ?? null,
+    unverified: l.unverified ?? null,
+    unverifiedReason: l.unverifiedReason ?? null,
+    enrichment: l.enrichment ?? null,
   };
 }
 

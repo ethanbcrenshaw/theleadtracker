@@ -40,6 +40,213 @@ const DIRECTORY_HOSTS = [
   "homeadvisor.com", "thumbtack.com", "nextdoor.com", "alignable.com",
 ];
 
+// ── Enrichment (Firecrawl search + light scoring) ────────────────────────────
+const ENRICH_MAX = 12;
+const ENRICH_CONCURRENCY = 3;
+const ENRICH_TIMEOUT_MS = 9000;
+
+type ProfileType =
+  | "website" | "google-business" | "facebook" | "instagram"
+  | "yelp" | "linkedin" | "directory" | "other";
+
+type Profile = { type: ProfileType; url: string; label?: string };
+type Reviews = { source: string; rating?: number; count?: number };
+
+type Enrichment = {
+  verifiedSummary?: string;
+  websiteStatus: "none" | "outdated" | "good" | "unknown";
+  profiles: Profile[];
+  reviews: Reviews[];
+  hours?: string;
+  ownerName?: string;
+  recentActivity?: string;
+  enrichedAt: string;
+};
+
+function classifyProfile(url: string): ProfileType | null {
+  const h = hostFromUrl(url);
+  if (!h) return null;
+  if (h === "facebook.com" || h.endsWith(".facebook.com")) return "facebook";
+  if (h === "instagram.com" || h.endsWith(".instagram.com")) return "instagram";
+  if (h === "yelp.com" || h.endsWith(".yelp.com")) return "yelp";
+  if (h === "linkedin.com" || h.endsWith(".linkedin.com")) return "linkedin";
+  if (h.includes("google.") && (url.includes("/maps") || url.includes("g.co/kgs") || url.includes("business.google"))) return "google-business";
+  if (isOneOf(h, DIRECTORY_HOSTS)) return "directory";
+  return null;
+}
+
+type FirecrawlSearchItem = { url?: string; title?: string; description?: string };
+type FirecrawlSearchResp = { success?: boolean; data?: { web?: FirecrawlSearchItem[] } | FirecrawlSearchItem[] };
+
+async function firecrawlSearch(query: string, apiKey: string, limit = 10): Promise<FirecrawlSearchItem[]> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ENRICH_TIMEOUT_MS);
+  try {
+    const res = await fetch("https://api.firecrawl.dev/v2/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ query, limit }),
+      signal: ctrl.signal,
+    });
+    if (!res.ok) return [];
+    const json = (await res.json()) as FirecrawlSearchResp;
+    if (!json?.success) return [];
+    const data = json.data;
+    if (Array.isArray(data)) return data;
+    return Array.isArray(data?.web) ? data!.web! : [];
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Parse strings like "4.6(214)" / "4.6 stars · 214 reviews" / "Rating: 4.6 - 214 reviews"
+function parseReviewSnippet(text: string): { rating?: number; count?: number } {
+  const rating = text.match(/(?:^|[^0-9])([1-5](?:\.[0-9])?)\s*(?:stars?|★|\/\s*5|\()/i);
+  const count = text.match(/([0-9][0-9,]{0,6})\s*(?:reviews?|ratings?)/i)
+             || text.match(/\(([0-9][0-9,]{1,6})\)/);
+  return {
+    rating: rating ? parseFloat(rating[1]) : undefined,
+    count: count ? parseInt(count[1].replace(/,/g, ""), 10) : undefined,
+  };
+}
+
+function parseRecentActivity(text: string): string | undefined {
+  const m = text.match(/(\d+)\s*(day|week|month|hour)s?\s*ago/i);
+  return m ? `${m[0]}` : undefined;
+}
+
+type BasicLead = {
+  business: string;
+  city: string;
+  state: string;
+  phone: string;
+  website: string | null;
+  websiteOpportunity: string;
+  sources: string[];
+  onlinePresence: string;
+};
+
+async function enrichLead(lead: BasicLead, firecrawlKey: string): Promise<{
+  enrichment: Enrichment;
+  confidenceScore: number;
+  confidenceEvidence: string[];
+  unverified: boolean;
+  unverifiedReason?: string;
+}> {
+  const q = `"${lead.business}" ${lead.city} ${lead.state}`;
+  const results = await firecrawlSearch(q, firecrawlKey, 10);
+
+  const profiles: Profile[] = [];
+  const reviews: Reviews[] = [];
+  const seenProfile = new Set<string>();
+  let recentActivity: string | undefined;
+
+  if (lead.website) {
+    profiles.push({ type: "website", url: `https://${lead.website}`, label: lead.website });
+    seenProfile.add(`website:${lead.website}`);
+  }
+
+  for (const r of results) {
+    if (!r.url) continue;
+    const t = classifyProfile(r.url);
+    if (!t) continue;
+    const key = `${t}:${r.url}`;
+    if (seenProfile.has(key)) continue;
+    seenProfile.add(key);
+    profiles.push({ type: t, url: r.url, label: r.title });
+
+    const snip = `${r.title || ""} ${r.description || ""}`;
+    const rv = parseReviewSnippet(snip);
+    if (rv.rating || rv.count) {
+      const source =
+        t === "google-business" ? "Google" :
+        t === "yelp" ? "Yelp" :
+        t === "facebook" ? "Facebook" : t;
+      if (!reviews.some((x) => x.source === source)) {
+        reviews.push({ source, rating: rv.rating, count: rv.count });
+      }
+    }
+    if (!recentActivity) {
+      const ra = parseRecentActivity(snip);
+      if (ra) recentActivity = `${t}: ${ra}`;
+    }
+  }
+
+  const websiteStatus: Enrichment["websiteStatus"] =
+    lead.websiteOpportunity === "Has Website" ? "good" :
+    lead.websiteOpportunity === "Outdated Website" ? "outdated" :
+    lead.website ? "good" : "none";
+
+  const enrichment: Enrichment = {
+    websiteStatus,
+    profiles,
+    reviews,
+    recentActivity,
+    enrichedAt: new Date().toISOString(),
+    verifiedSummary: results[0]?.description ? results[0].description.slice(0, 220) : undefined,
+  };
+
+  // ── Confidence scoring ──
+  let score = 30; // Google Places listing baseline
+  const evidence: string[] = [];
+
+  if (lead.phone) { score += 15; evidence.push("phone listed"); }
+  else evidence.push("no phone");
+
+  const hasFB = profiles.some((p) => p.type === "facebook");
+  const hasIG = profiles.some((p) => p.type === "instagram");
+  const hasYelp = profiles.some((p) => p.type === "yelp");
+  const hasGMB = profiles.some((p) => p.type === "google-business");
+  const profileCount = [hasFB, hasIG, hasYelp, hasGMB].filter(Boolean).length;
+  score += Math.min(profileCount * 8, 24);
+
+  if (hasFB) evidence.push("FB found");
+  if (hasIG) evidence.push("IG found");
+  if (hasYelp) evidence.push("Yelp found");
+  if (hasGMB) evidence.push("GMB listed");
+
+  if (reviews.length) {
+    const top = reviews[0];
+    const chip = [
+      top.rating ? `${top.rating}★` : null,
+      top.count ? `${top.count} reviews` : null,
+    ].filter(Boolean).join(" · ");
+    if (chip) evidence.push(chip);
+    score += 10;
+  }
+
+  if (recentActivity) { score += 8; evidence.push(recentActivity); }
+
+  if (websiteStatus === "none") { score -= 5; evidence.push("no website found"); }
+  if (websiteStatus === "outdated") { score += 5; evidence.push("outdated site"); }
+  if (websiteStatus === "good") evidence.push("has website");
+
+  // ── Unverified flags ──
+  let unverified = false;
+  let unverifiedReason: string | undefined;
+
+  const snippetsAll = results.map((r) => `${r.title || ""} ${r.description || ""}`).join(" ").toLowerCase();
+  if (/permanently closed|closed permanently|out of business|no longer in business/.test(snippetsAll)) {
+    unverified = true;
+    unverifiedReason = "likely closed";
+    evidence.push("closed?");
+    score -= 40;
+  } else if (!lead.phone && profileCount === 0 && !lead.website) {
+    unverified = true;
+    unverifiedReason = "could not verify business exists";
+    score -= 30;
+  } else if (websiteStatus === "good" && profileCount >= 2 && reviews.length && (reviews[0].count ?? 0) > 50) {
+    unverified = true;
+    unverifiedReason = "already has strong modern presence — poor prospect";
+  }
+
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  return { enrichment, confidenceScore: score, confidenceEvidence: evidence, unverified, unverifiedReason };
+}
+
 function hostFromUrl(u: string): string | null {
   try {
     return new URL(u.startsWith("http") ? u : `https://${u}`)
@@ -300,6 +507,35 @@ export const Route = createFileRoute("/api/generate-leads")({
               });
             } catch {
               // Never let this pass break generation.
+            }
+          }
+
+          // Enrichment pass — never blocks the batch on failure.
+          const enrichedLeads = leads as (typeof leads[number] & {
+            enrichment?: Enrichment;
+            confidenceScore?: number;
+            confidenceEvidence?: string[];
+            unverified?: boolean;
+            unverifiedReason?: string;
+          })[];
+          if (firecrawlKey) {
+            const toEnrich = enrichedLeads.slice(0, ENRICH_MAX);
+            try {
+              await runWithConcurrency(toEnrich, ENRICH_CONCURRENCY, async (lead) => {
+                try {
+                  const e = await enrichLead(lead, firecrawlKey);
+                  lead.enrichment = e.enrichment;
+                  lead.confidenceScore = e.confidenceScore;
+                  lead.confidenceEvidence = e.confidenceEvidence;
+                  lead.unverified = e.unverified;
+                  lead.unverifiedReason = e.unverifiedReason;
+                } catch {
+                  lead.confidenceScore = 25;
+                  lead.confidenceEvidence = ["enrichment failed"];
+                }
+              });
+            } catch {
+              // Never break generation because of enrichment issues.
             }
           }
 

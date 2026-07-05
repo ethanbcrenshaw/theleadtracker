@@ -189,6 +189,25 @@ export function LeadTable({ leads, selected, toggleSelect, toggleAll, onView, on
                   {l.ownerNote && (
                     <div className="text-xs text-muted-foreground mt-0.5 italic">{l.ownerNote}</div>
                   )}
+                  {l.unverified && (
+                    <div className="mono mt-1.5 text-[color:var(--sienna)]">
+                      ⚠ UNVERIFIED — {(l.unverifiedReason || "review").toUpperCase()}
+                    </div>
+                  )}
+                  {(l.confidenceEvidence?.length ?? 0) > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {typeof l.confidenceScore === "number" && (
+                        <span className="mono border border-foreground px-1.5 py-0.5 text-foreground">
+                          CONF {String(l.confidenceScore).padStart(2, "0")}
+                        </span>
+                      )}
+                      {l.confidenceEvidence!.slice(0, 5).map((chip, i) => (
+                        <span key={i} className="mono border border-border px-1.5 py-0.5 text-muted-foreground">
+                          {chip}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   {l.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1.5">
                       {l.tags.map((t) => <TagBadge key={t} label={t} />)}
