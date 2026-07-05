@@ -150,27 +150,28 @@ export function AIGenerateModal({ open, onClose }: Props) {
       {open && (
         <>
           <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-            className="fixed inset-0 bg-foreground/30 backdrop-blur-sm z-40" onClick={close} />
+            className="fixed inset-0 bg-background/60 backdrop-blur-sm z-40" onClick={close} />
           <motion.div
-            initial={{opacity:0, y:20, scale:0.96}} animate={{opacity:1, y:0, scale:1}} exit={{opacity:0, y:20, scale:0.96}}
+            initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0, y:10}}
             className="fixed inset-0 z-50 grid place-items-center p-4 pointer-events-none"
           >
-            <div className={`bg-card border border-border rounded-3xl shadow-elev w-full pointer-events-auto ${candidates ? "max-w-3xl" : "max-w-md"} max-h-[90vh] flex flex-col`}>
-              <div className="flex items-center justify-between p-6 pb-4 border-b border-border/50">
-                <div className="flex items-center gap-2">
-                  <span className="h-9 w-9 grid place-items-center rounded-full bg-gradient-to-br from-tan/40 to-gold/40">
-                    <Sparkles className="h-4 w-4 text-tan-foreground" />
-                  </span>
-                  <h2 className="font-display text-xl">
-                    {candidates ? "Review found leads" : "Generate Leads with AI"}
+            <div className={`bg-background border border-foreground w-full pointer-events-auto ${candidates ? "max-w-3xl" : "max-w-md"} max-h-[90vh] flex flex-col`}>
+              <div className="flex items-center justify-between p-6 pb-4 border-b border-border">
+                <div>
+                  <div className="mono text-muted-foreground">— AI Generate</div>
+                  <h2 className="font-display text-2xl mt-1 lowercase font-normal">
+                    {candidates ? "review found leads" : "generate leads"}
                   </h2>
                 </div>
-                <button onClick={close} className="p-1.5 rounded-lg hover:bg-secondary"><X className="h-4 w-4" /></button>
+                <div className="flex items-center gap-3">
+                  <button onClick={close} className="mono text-muted-foreground hover:text-foreground">[ ESC ]</button>
+                  <button onClick={close} aria-label="Close" className="p-1 hover:bg-foreground/10"><X className="h-4 w-4" /></button>
+                </div>
               </div>
 
               {!candidates ? (
                 <div className="p-6 overflow-y-auto">
-                  <p className="text-xs text-muted-foreground mb-4">
+                  <p className="mono text-muted-foreground mb-4">
                     Searches the live web, then verifies each business's actual online presence before importing.
                   </p>
                   <div className="space-y-3">
@@ -190,16 +191,18 @@ export function AIGenerateModal({ open, onClose }: Props) {
                     </Field>
                   </div>
                   {error && (
-                    <div className="mt-3 flex items-start gap-2 rounded-xl bg-destructive/10 border border-destructive/30 p-3 text-xs text-destructive">
+                    <div className="mt-3 flex items-start gap-2 border border-destructive p-3 text-xs text-destructive">
                       <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" /> {error}
                     </div>
                   )}
                   <button
                     onClick={search}
                     disabled={loading}
-                    className="mt-5 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-navy text-navy-foreground font-medium hover:opacity-90 disabled:opacity-60"
+                    className="mono mt-5 w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-foreground text-background hover:opacity-90 disabled:opacity-60"
                   >
-                    {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> {status || "Working…"}</> : <><Sparkles className="h-4 w-4" /> Find leads</>}
+                    {loading
+                      ? <><Loader2 className="h-4 w-4 animate-spin" /> {status || "Working…"}</>
+                      : <><Sparkles className="h-3.5 w-3.5" /> [ FIND LEADS ]</>}
                   </button>
                 </div>
               ) : (
@@ -222,23 +225,23 @@ export function AIGenerateModal({ open, onClose }: Props) {
                       <p className="text-sm text-muted-foreground">No leads to review.</p>
                     )}
                   </div>
-                  <div className="p-4 border-t border-border/50 flex items-center justify-between gap-3">
-                    <button onClick={() => setCandidates(null)} className="text-xs text-muted-foreground hover:text-foreground">
-                      ← Back to search
+                  <div className="p-4 border-t border-border flex items-center justify-between gap-3">
+                    <button onClick={() => setCandidates(null)} className="mono ink-link">
+                      [ BACK ]
                     </button>
                     <button
                       onClick={importSelected}
                       disabled={!selectedCount}
-                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-navy text-navy-foreground font-medium hover:opacity-90 disabled:opacity-50"
+                      className="mono inline-flex items-center gap-2 px-5 py-2.5 bg-foreground text-background hover:opacity-90 disabled:opacity-50"
                     >
-                      <Check className="h-4 w-4" /> Import {selectedCount} {selectedCount === 1 ? "lead" : "leads"}
+                      <Check className="h-3.5 w-3.5" /> [ IMPORT {String(selectedCount).padStart(3, "0")} ]
                     </button>
                   </div>
                 </>
               )}
             </div>
           </motion.div>
-          <style>{`.input{width:100%;padding:.55rem .75rem;border-radius:.75rem;background:var(--secondary);border:1px solid var(--border);font-size:.875rem}`}</style>
+          <style>{`.input{width:100%;padding:.55rem .75rem;background:transparent;border:1px solid var(--border);font-size:.875rem;color:var(--foreground)}.input:focus{outline:none;border-color:var(--foreground)}`}</style>
         </>
       )}
     </AnimatePresence>
@@ -248,9 +251,9 @@ export function AIGenerateModal({ open, onClose }: Props) {
 function Section({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="mb-2">
-        <h3 className="text-sm font-semibold">{title}</h3>
-        <p className="text-[11px] text-muted-foreground">{subtitle}</p>
+      <div className="mb-3 pb-2 border-b border-border">
+        <div className="mono text-foreground">{title}</div>
+        <p className="mono text-muted-foreground mt-1">{subtitle}</p>
       </div>
       <div className="space-y-2">{children}</div>
     </div>
@@ -260,22 +263,22 @@ function Section({ title, subtitle, children }: { title: string; subtitle: strin
 function CandidateRow({ c, onToggle }: { c: Candidate; onToggle: (id: string) => void }) {
   return (
     <label
-      className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition ${
-        c._selected ? "border-navy/40 bg-navy/5" : "border-border hover:bg-secondary/40"
+      className={`flex items-start gap-3 p-3 border cursor-pointer transition ${
+        c._selected ? "border-foreground bg-foreground/[0.04]" : "border-border hover:bg-foreground/[0.02]"
       }`}
     >
       <input
         type="checkbox"
         checked={c._selected}
         onChange={() => onToggle(c._id)}
-        className="mt-1 h-4 w-4 rounded accent-navy"
+        className="mt-1 h-4 w-4 rounded-none accent-foreground"
       />
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline justify-between gap-2">
-          <p className="font-medium text-sm truncate">{c.business}</p>
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground shrink-0">{c.websiteOpportunity}</span>
+          <p className="font-display text-lg truncate">{c.business}</p>
+          <span className="mono text-muted-foreground shrink-0">{c.websiteOpportunity}</span>
         </div>
-        <p className="text-xs text-muted-foreground mt-0.5">{c.onlinePresence}</p>
+        <p className="text-xs text-muted-foreground mt-1">{c.onlinePresence}</p>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[11px] text-muted-foreground">
           {(c.city || c.state) && <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" />{c.city}{c.state ? `, ${c.state}` : ""}</span>}
           {c.phone && <span className="inline-flex items-center gap-1"><Phone className="h-3 w-3" />{c.phone}</span>}
@@ -295,7 +298,7 @@ function CandidateRow({ c, onToggle }: { c: Candidate; onToggle: (id: string) =>
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
+      <span className="mono text-muted-foreground">— {label}</span>
       <div className="mt-1">{children}</div>
     </label>
   );
