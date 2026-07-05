@@ -1,6 +1,7 @@
 import { ChevronDown, ArrowUp, ArrowDown } from "lucide-react";
 import type { Lead, LeadStatus, Quality } from "@/lib/types";
 import { QualityBadge, StatusBadge, TagBadge } from "./Badges";
+import { Botanical } from "./Botanical";
 import { formatDate, isValidContactDate, relativeFollowUp, STATUSES } from "@/lib/crm-utils";
 import { useMemo, useState } from "react";
 
