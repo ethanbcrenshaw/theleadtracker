@@ -36,6 +36,40 @@ export interface CallLog {
   note?: string;
 }
 
+export type LeadProfileType =
+  | "website"
+  | "google-business"
+  | "facebook"
+  | "instagram"
+  | "yelp"
+  | "linkedin"
+  | "directory"
+  | "other";
+
+export interface LeadProfile {
+  type: LeadProfileType;
+  url: string;
+  label?: string;
+  note?: string;
+}
+
+export interface LeadReviews {
+  source: string;   // "Google", "Yelp", "Facebook"
+  rating?: number;  // e.g. 4.6
+  count?: number;   // e.g. 214
+}
+
+export interface LeadEnrichment {
+  verifiedSummary?: string;
+  websiteStatus: "none" | "outdated" | "good" | "unknown";
+  profiles: LeadProfile[];
+  reviews: LeadReviews[];
+  hours?: string;
+  ownerName?: string;
+  recentActivity?: string;
+  enrichedAt: string; // ISO
+}
+
 export interface CallRecord {
   id: string;
   leadId: string;
@@ -81,4 +115,9 @@ export interface Lead {
   aiNextAction?: string;
   zoomBooked?: boolean;
   zoomDate?: string;
+  confidenceScore?: number;         // 0-100
+  confidenceEvidence?: string[];    // short chip strings
+  unverified?: boolean;
+  unverifiedReason?: string;
+  enrichment?: LeadEnrichment;
 }
