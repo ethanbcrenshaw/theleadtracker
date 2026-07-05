@@ -1,7 +1,7 @@
-import { X, ArrowLeft, PhoneCall, Voicemail, Video, CalendarClock, CheckCircle2, XCircle } from "lucide-react";
+import { X, ArrowLeft, PhoneCall, Voicemail, Video, CalendarClock, CheckCircle2, XCircle, ExternalLink, Loader2, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import type { Lead, LeadStatus, WebsiteOpportunity } from "@/lib/types";
+import type { Lead, LeadEnrichment, LeadProfileType, LeadStatus, WebsiteOpportunity } from "@/lib/types";
 import { useLeads } from "@/lib/store";
 import { StatusBadge, TagBadge } from "./Badges";
 import { formatDate, normalizeTag, pitchAngle, sourceLinks } from "@/lib/crm-utils";
@@ -159,6 +159,7 @@ function DetailBody({
                 onStartCall={onStartCall}
                 onEdit={() => setEditOpen(true)}
               />
+              <Dossier lead={lead} updateLead={updateLead} />
               <OutcomeActions
                 lead={lead}
                 setStatus={setStatus}
