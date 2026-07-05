@@ -1,4 +1,4 @@
-export type SavedView = "hot" | "followups" | "pipeline" | "all" | "analytics";
+export type SavedView = "today" | "hot" | "followups" | "pipeline" | "all" | "analytics";
 
 interface Props {
   view: SavedView;
@@ -9,6 +9,7 @@ interface Props {
 const PAD = (n: number) => String(n).padStart(3, "0");
 
 const TABS: { id: SavedView; label: string }[] = [
+  { id: "today",     label: "Today" },
   { id: "hot",       label: "Hot" },
   { id: "followups", label: "Follow-ups" },
   { id: "pipeline",  label: "Pipeline" },

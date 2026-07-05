@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLeads } from "@/lib/store";
 import { allTags, exportCSV, isValidContactDate } from "@/lib/crm-utils";
 import { StatsCards } from "@/components/crm/StatsCards";
@@ -17,6 +17,7 @@ import { CallAssistant } from "@/components/crm/CallAssistant";
 import { AddLeadSheet } from "@/components/crm/AddLeadSheet";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Botanical, BotanicalDivider } from "@/components/crm/Botanical";
+import { TodayView, type TodayItem } from "@/components/crm/TodayView";
 import type { Lead } from "@/lib/types";
 
 export const Route = createFileRoute("/")({
@@ -39,7 +40,17 @@ function Dashboard() {
   const bulkDelete = useLeads((s) => s.bulkDelete);
 
   const [search, setSearch] = useState("");
-  const [view, setView] = useState<SavedView>("hot");
+  const [view, setView] = useState<SavedView>("today");
+  const [todayCap, setTodayCap] = useState<number>(() => {
+    if (typeof window === "undefined") return 10;
+    const v = Number(window.localStorage.getItem("leadbloom.todayCap"));
+    return Number.isFinite(v) && v >= 3 && v <= 50 ? v : 10;
+  });
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("leadbloom.todayCap", String(todayCap));
+    }
+  }, [todayCap]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const active = useMemo(
     () => (activeId ? (leads.find((l) => l.id === activeId) ?? null) : null),
@@ -69,6 +80,12 @@ function Dashboard() {
   const endOfToday = useMemo(() => {
     const d = new Date();
     d.setHours(23, 59, 59, 999);
+    return d.getTime();
+  }, []);
+
+  const startOfToday = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
     return d.getTime();
   }, []);
 
@@ -140,6 +157,85 @@ function Dashboard() {
     all: allFiltered.length,
   };
 
+  // TODAY — merged prioritized worklist
+  const todayItems = useMemo<TodayItem[]>(() => {
+    const now = Date.now();
+    const items: TodayItem[] = [];
+    const usedIds = new Set<string>();
+
+    // 1) Overdue follow-ups (most overdue first)
+    for (const l of searched) {
+      if (!isValidContactDate(l.nextFollowUp)) continue;
+      const t = new Date(l.nextFollowUp!).getTime();
+      if (t >= startOfToday) continue;
+      const days = Math.max(1, Math.ceil((now - t) / 86400000));
+      items.push({
+        lead: l,
+        reason: `OVERDUE — ${days} DAY${days === 1 ? "" : "S"}`,
+        tone: "overdue",
+        sortKey: -t, // most overdue = smallest t = largest -t
+      });
+      usedIds.add(l.id);
+    }
+    items.sort((a, b) => b.sortKey - a.sortKey);
+
+    // 2) Follow-ups / callbacks scheduled TODAY
+    const todayScheduled: TodayItem[] = [];
+    for (const l of searched) {
+      if (usedIds.has(l.id)) continue;
+      if (!isValidContactDate(l.nextFollowUp)) continue;
+      const t = new Date(l.nextFollowUp!).getTime();
+      if (t < startOfToday || t > endOfToday) continue;
+      const reason = l.status === "Callback Scheduled" ? "CALLBACK TODAY" : "FOLLOW-UP TODAY";
+      todayScheduled.push({ lead: l, reason, tone: "today", sortKey: t });
+      usedIds.add(l.id);
+    }
+    todayScheduled.sort((a, b) => a.sortKey - b.sortKey);
+    items.push(...todayScheduled);
+
+    // 3) Hot untouched leads to fill up to cap. Prefer verified, higher confidence first.
+    const hotPool = searched
+      .filter(
+        (l) =>
+          !usedIds.has(l.id) &&
+          l.quality === "High" &&
+          l.status === "Not Called" &&
+          !isValidContactDate(l.lastContacted) &&
+          !l.unverified,
+      )
+      .sort((a, b) => {
+        const ac = a.confidenceScore ?? -1;
+        const bc = b.confidenceScore ?? -1;
+        if (ac !== bc) return bc - ac;
+        return a.priority - b.priority;
+      });
+
+    for (const l of hotPool) {
+      if (items.length >= todayCap) break;
+      items.push({
+        lead: l,
+        reason: "HOT — NEVER CALLED",
+        tone: "hot",
+        sortKey: 0,
+      });
+      usedIds.add(l.id);
+    }
+
+    return items.slice(0, todayCap);
+  }, [searched, startOfToday, endOfToday, todayCap]);
+
+  const countsWithToday = { ...counts, today: todayItems.length };
+
+  const dateLine = useMemo(() => {
+    const d = new Date();
+    const weekday = d.toLocaleDateString(undefined, { weekday: "long" }).toUpperCase();
+    const month = d.toLocaleDateString(undefined, { month: "long" }).toUpperCase();
+    const day = d.getDate();
+    const n = todayItems.length;
+    const noun = n === 1 ? "CALL" : "CALLS";
+    return `${weekday} — ${month} ${day} — ${String(n).padStart(2, "0")} ${noun} QUEUED`;
+  }, [todayItems.length]);
+
   // What's used by bulk actions (only meaningful in the "all" table view).
   const tableLeads = allFiltered;
 
@@ -201,7 +297,7 @@ function Dashboard() {
         <StatsCards leads={leads} />
 
         <div className="space-y-5">
-          <SavedViewPills view={view} setView={setView} counts={counts} />
+          <SavedViewPills view={view} setView={setView} counts={countsWithToday} />
 
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="w-full sm:w-96">
@@ -218,7 +314,9 @@ function Dashboard() {
                 SHOWING{" "}
                 <span className="text-foreground">
                   {String(
-                    view === "hot"
+                    view === "today"
+                      ? todayItems.length
+                      : view === "hot"
                       ? hotLeads.length
                       : view === "followups"
                         ? followupLeads.length
@@ -245,6 +343,31 @@ function Dashboard() {
           )}
         </div>
 
+        {view === "today" && (
+          <div className="space-y-3">
+            <div className="border-b-2 border-foreground/60 pb-2 flex items-baseline justify-between gap-4 flex-wrap">
+              <div className="mono text-foreground">TODAY</div>
+              <div className="flex items-center gap-4">
+                <div className="mono text-muted-foreground flex items-center gap-2">
+                  <span>CAP</span>
+                  <button
+                    onClick={() => setTodayCap((c) => Math.max(3, c - 1))}
+                    className="mono ink-link px-1"
+                    aria-label="Decrease cap"
+                  >[ − ]</button>
+                  <span className="text-foreground w-6 text-center">{String(todayCap).padStart(2, "0")}</span>
+                  <button
+                    onClick={() => setTodayCap((c) => Math.min(50, c + 1))}
+                    className="mono ink-link px-1"
+                    aria-label="Increase cap"
+                  >[ + ]</button>
+                </div>
+                <div className="mono text-muted-foreground">— {String(todayItems.length).padStart(3, "0")}</div>
+              </div>
+            </div>
+            <div className="mono text-muted-foreground">{dateLine}</div>
+          </div>
+        )}
         {view === "hot" && (
           <SectionHeader label="Hot, Not Called" count={hotLeads.length} />
         )}
@@ -258,6 +381,9 @@ function Dashboard() {
           <SectionHeader label="All Leads" count={allFiltered.length} />
         )}
 
+        {view === "today" && (
+          <TodayView items={todayItems} onStartCall={setCallLead} />
+        )}
         {view === "hot" && (
           <QueueView
             leads={hotLeads}
