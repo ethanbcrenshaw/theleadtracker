@@ -17,6 +17,8 @@ import { CallAssistant } from "@/components/crm/CallAssistant";
 import { AddLeadSheet } from "@/components/crm/AddLeadSheet";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Botanical, BotanicalDivider } from "@/components/crm/Botanical";
+import { Wordmark } from "@/components/crm/Wordmark";
+import { BloomFlower } from "@/components/crm/BloomFlower";
 import { TodayView, type TodayItem } from "@/components/crm/TodayView";
 import { DailyBriefing } from "@/components/crm/DailyBriefing";
 import type { Lead } from "@/lib/types";
@@ -280,7 +282,9 @@ function Dashboard() {
         {/* top bar */}
         <div className="border-b border-border">
           <div className="max-w-[1500px] mx-auto px-8 py-3 flex items-center justify-between">
-            <div className="mono text-foreground">lead bloom&nbsp;&nbsp;✳</div>
+            <div className="flex items-center gap-2 text-foreground">
+              <Wordmark size={22} />
+            </div>
             <div className="flex items-center gap-6">
               <button onClick={() => setAiOpen(true)} className="mono ink-link">[ AI GENERATE ]</button>
               <button onClick={() => exportCSV(allFiltered)} className="mono ink-link">[ EXPORT CSV ]</button>
@@ -299,7 +303,14 @@ function Dashboard() {
             className="pointer-events-none hidden md:block"
             style={{ position: "absolute", top: 0, bottom: 0, right: "1rem", width: "22rem" }}
           >
-            <Botanical variant="masthead" className="h-full w-full" opacity={0.13} />
+            <Botanical variant="masthead" className="h-full w-full" opacity={0.08} />
+          </div>
+          <div
+            aria-hidden
+            className="pointer-events-none hidden md:block text-foreground"
+            style={{ position: "absolute", top: "0.5rem", bottom: "0.5rem", right: "3.5rem", width: "13rem" }}
+          >
+            <BloomFlower className="h-full w-full" />
           </div>
           <div className="relative mono text-muted-foreground">CRM — LOCAL BUSINESS OUTREACH — 2026</div>
           <div className="relative mt-6 grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-10 items-end">
