@@ -1,5 +1,6 @@
 import type { Quality, LeadStatus, WebsiteOpportunity, LeadSource } from "@/lib/types";
 import { STATUSES, QUALITIES, OPPORTUNITIES, SOURCES } from "@/lib/crm-utils";
+import { TagBadge } from "./Badges";
 
 export interface FilterState {
   city: string;
@@ -7,12 +8,18 @@ export interface FilterState {
   status: LeadStatus | "All";
   opportunity: WebsiteOpportunity | "All";
   source: LeadSource | "All";
+  tags: string[];
 }
+
+export const EMPTY_FILTERS: FilterState = {
+  city: "All", quality: "All", status: "All", opportunity: "All", source: "All", tags: [],
+};
 
 interface Props {
   filters: FilterState;
   setFilters: (f: FilterState) => void;
   cities: string[];
+  tags: string[];
 }
 
 function Chip({
@@ -41,9 +48,23 @@ function Group({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export function Filters({ filters, setFilters, cities }: Props) {
+export function Filters({ filters, setFilters, cities, tags }: Props) {
+  const toggleTag = (t: string) => {
+    const next = filters.tags.includes(t)
+      ? filters.tags.filter((x) => x !== t)
+      : [...filters.tags, t];
+    setFilters({ ...filters, tags: next });
+  };
+
   return (
     <div className="border border-border p-5 space-y-3 bg-card">
+      {tags.length > 0 && (
+        <Group label="Tags">
+          {tags.map((t) => (
+            <TagBadge key={t} label={t} active={filters.tags.includes(t)} onClick={() => toggleTag(t)} />
+          ))}
+        </Group>
+      )}
       <Group label="City">
         <Chip active={filters.city === "All"} onClick={() => setFilters({ ...filters, city: "All" })}>
           All

@@ -1,6 +1,6 @@
 import { ChevronDown, ArrowUp, ArrowDown } from "lucide-react";
 import type { Lead, LeadStatus, Quality } from "@/lib/types";
-import { QualityBadge, StatusBadge } from "./Badges";
+import { QualityBadge, StatusBadge, TagBadge } from "./Badges";
 import { formatDate, isValidContactDate, relativeFollowUp, STATUSES } from "@/lib/crm-utils";
 import { useMemo, useState } from "react";
 
@@ -187,6 +187,11 @@ export function LeadTable({ leads, selected, toggleSelect, toggleAll, onView, on
                   )}
                   {l.ownerNote && (
                     <div className="text-xs text-muted-foreground mt-0.5 italic">{l.ownerNote}</div>
+                  )}
+                  {l.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {l.tags.map((t) => <TagBadge key={t} label={t} />)}
+                    </div>
                   )}
                 </td>
                 <td className="py-4 px-2 mono text-muted-foreground">{l.city}, {l.state}</td>

@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useLeads } from "@/lib/store";
-import { exportCSV, isValidContactDate } from "@/lib/crm-utils";
+import { allTags, exportCSV, isValidContactDate } from "@/lib/crm-utils";
 import { StatsCards } from "@/components/crm/StatsCards";
-import { Filters, type FilterState } from "@/components/crm/Filters";
+import { Filters, EMPTY_FILTERS, type FilterState } from "@/components/crm/Filters";
+import { FilterPresets } from "@/components/crm/FilterPresets";
+import { useSavedFilters } from "@/lib/savedFilters";
 import { LeadTable, qualityRank, statusRank } from "@/components/crm/LeadTable";
 import { LeadDetail } from "@/components/crm/LeadDetail";
 import { QueueView } from "@/components/crm/QueueView";
@@ -37,19 +39,24 @@ function Dashboard() {
 
   const [search, setSearch] = useState("");
   const [view, setView] = useState<SavedView>("hot");
-  const [active, setActive] = useState<Lead | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const active = useMemo(
+    () => (activeId ? (leads.find((l) => l.id === activeId) ?? null) : null),
+    [leads, activeId]
+  );
+  const setActive = (l: Lead | null) => setActiveId(l ? l.id : null);
   const [aiOpen, setAiOpen] = useState(false);
   const [callLead, setCallLead] = useState<Lead | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [addOpen, setAddOpen] = useState(false);
-  const [filters, setFilters] = useState<FilterState>({
-    city: "All", quality: "All", status: "All", opportunity: "All", source: "All",
-  });
+  const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
+  const { presets, save: savePreset, remove: removePreset } = useSavedFilters();
 
   const cities = useMemo(
     () => Array.from(new Set(leads.map((l) => l.city))).sort(),
     [leads]
   );
+  const tags = useMemo(() => allTags(leads), [leads]);
 
   // Apply search by business or city only (per spec)
   const searched = useMemo(() => {
@@ -120,6 +127,7 @@ function Dashboard() {
       if (filters.opportunity !== "All" && l.websiteOpportunity !== filters.opportunity)
         return false;
       if (filters.source !== "All" && !l.sources.includes(filters.source)) return false;
+      if (filters.tags.length > 0 && !filters.tags.some((t) => l.tags.includes(t))) return false;
       return true;
     });
   }, [searched, filters]);
@@ -217,7 +225,15 @@ function Dashboard() {
           </div>
 
           {view === "all" && (
-            <Filters filters={filters} setFilters={setFilters} cities={cities} />
+            <div className="space-y-3">
+              <FilterPresets
+                presets={presets}
+                onApply={setFilters}
+                onSave={(name) => savePreset(name, filters)}
+                onDelete={removePreset}
+              />
+              <Filters filters={filters} setFilters={setFilters} cities={cities} tags={tags} />
+            </div>
           )}
         </div>
 

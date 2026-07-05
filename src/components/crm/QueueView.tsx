@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Lead, WebsiteOpportunity } from "@/lib/types";
 import { LeadDetail } from "./LeadDetail";
 import { sortLeads } from "./LeadTable";
+import { TagBadge } from "./Badges";
 
 interface Props {
   leads: Lead[];
@@ -99,6 +100,11 @@ export function QueueView({ leads, onStartCall, presorted, emptyMessage, title }
                       <div className="mono text-muted-foreground truncate mt-1.5">
                         {l.city}, {l.state}
                       </div>
+                      {l.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {l.tags.map((t) => <TagBadge key={t} label={t} />)}
+                        </div>
+                      )}
                     </div>
                     <OpportunityTag op={l.websiteOpportunity} />
                   </button>

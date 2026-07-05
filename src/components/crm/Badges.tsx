@@ -42,3 +42,42 @@ export function QualityBadge({ q }: { q: Quality }) {
 export function StatusBadge({ s }: { s: LeadStatus }) {
   return <DotTag label={s} dot={statusDot(s)} />;
 }
+
+/**
+ * Plain rectangular tag chip — no color coding, since tags are free-form
+ * and shouldn't compete with the fixed quality/status dot palette.
+ */
+export function TagBadge({
+  label,
+  onRemove,
+  active,
+  onClick,
+}: {
+  label: string;
+  onRemove?: () => void;
+  active?: boolean;
+  onClick?: () => void;
+}) {
+  const Comp = onClick ? "button" : "span";
+  return (
+    <Comp
+      onClick={onClick}
+      className={`mono inline-flex items-center gap-1.5 whitespace-nowrap px-1.5 py-1 border transition-colors ${
+        active
+          ? "border-foreground bg-foreground text-background"
+          : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/40"
+      }`}
+    >
+      {label}
+      {onRemove && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onRemove(); }}
+          aria-label={`Remove tag ${label}`}
+          className="hover:text-[color:var(--sienna)]"
+        >
+          ×
+        </button>
+      )}
+    </Comp>
+  );
+}

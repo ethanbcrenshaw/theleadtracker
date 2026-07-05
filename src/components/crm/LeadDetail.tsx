@@ -3,8 +3,8 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Lead, LeadStatus, WebsiteOpportunity } from "@/lib/types";
 import { useLeads } from "@/lib/store";
-import { StatusBadge } from "./Badges";
-import { formatDate, pitchAngle, sourceLinks } from "@/lib/crm-utils";
+import { StatusBadge, TagBadge } from "./Badges";
+import { formatDate, normalizeTag, pitchAngle, sourceLinks } from "@/lib/crm-utils";
 import { AddLeadSheet } from "./AddLeadSheet";
 
 interface Props {
@@ -170,6 +170,7 @@ function DetailBody({
                 setNote={setNote}
                 addNote={addNote}
               />
+              <TagsBlock lead={lead} updateLead={updateLead} />
 
               {(lead.aiSummary || lead.aiNextAction) && (
                 <div className="border-t border-border pt-4">
@@ -507,6 +508,61 @@ function NotesBlock({
           className="mono px-4 py-2 bg-foreground text-background hover:opacity-90 disabled:opacity-40"
         >
           [ SAVE NOTE ]
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function TagsBlock({
+  lead,
+  updateLead,
+}: {
+  lead: Lead;
+  updateLead: (id: string, patch: Partial<Lead>) => void;
+}) {
+  const [draft, setDraft] = useState("");
+
+  const addTag = () => {
+    const t = normalizeTag(draft);
+    if (!t || lead.tags.includes(t)) {
+      setDraft("");
+      return;
+    }
+    updateLead(lead.id, { tags: [...lead.tags, t] });
+    setDraft("");
+  };
+
+  const removeTag = (t: string) => {
+    updateLead(lead.id, { tags: lead.tags.filter((x) => x !== t) });
+  };
+
+  return (
+    <div className="border-t border-border pt-4 space-y-3">
+      <div className="mono text-muted-foreground">— Tags</div>
+      <div className="flex flex-wrap gap-1.5">
+        {lead.tags.length === 0 && (
+          <span className="mono text-muted-foreground">— no tags yet —</span>
+        )}
+        {lead.tags.map((t) => (
+          <TagBadge key={t} label={t} onRemove={() => removeTag(t)} />
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addTag();
+            }
+          }}
+          placeholder="e.g. no website, referral"
+          className="flex-1 px-3 py-2 border border-border bg-transparent text-sm focus:outline-none focus:border-foreground"
+        />
+        <button onClick={addTag} className="mono px-4 py-2 border border-foreground hover:bg-foreground hover:text-background">
+          [ ADD ]
         </button>
       </div>
     </div>

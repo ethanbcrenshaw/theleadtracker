@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Lead, LeadSource, LeadStatus, WebsiteOpportunity } from "@/lib/types";
 import { useLeads } from "@/lib/store";
-import { qualityFromOpportunity, STATUSES, OPPORTUNITIES, SOURCES } from "@/lib/crm-utils";
+import { normalizeTag, qualityFromOpportunity, STATUSES, OPPORTUNITIES, SOURCES } from "@/lib/crm-utils";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from "@/components/ui/sheet";
@@ -24,6 +24,7 @@ type Draft = {
   source: LeadSource;
   notes: string;
   nextFollowUp: string; // yyyy-mm-dd
+  tags: string; // comma-separated
 };
 
 function draftFromLead(lead?: Lead): Draft {
@@ -38,7 +39,17 @@ function draftFromLead(lead?: Lead): Draft {
     source: (lead?.sources?.[0] as LeadSource) ?? "Other",
     notes: lead?.notes ?? "",
     nextFollowUp: lead?.nextFollowUp ? lead.nextFollowUp.slice(0, 10) : "",
+    tags: (lead?.tags ?? []).join(", "),
   };
+}
+
+function parseTags(raw: string): string[] {
+  const seen = new Set<string>();
+  for (const part of raw.split(",")) {
+    const t = normalizeTag(part);
+    if (t) seen.add(t);
+  }
+  return Array.from(seen);
 }
 
 export function AddLeadSheet({ open, onOpenChange, mode = "add", lead }: Props) {
@@ -60,6 +71,7 @@ export function AddLeadSheet({ open, onOpenChange, mode = "add", lead }: Props) 
     if (!canSave) return;
     const iso = d.nextFollowUp ? new Date(`${d.nextFollowUp}T12:00:00`).toISOString() : undefined;
     const q = qualityFromOpportunity(d.websiteOpportunity);
+    const tags = parseTags(d.tags);
     if (mode === "edit" && lead) {
       updateLead(lead.id, {
         business: d.business.trim(),
@@ -72,6 +84,7 @@ export function AddLeadSheet({ open, onOpenChange, mode = "add", lead }: Props) 
         status: d.status,
         sources: [d.source],
         notes: d.notes,
+        tags,
         nextFollowUp: iso,
       });
     } else {
@@ -89,7 +102,7 @@ export function AddLeadSheet({ open, onOpenChange, mode = "add", lead }: Props) 
         status: d.status,
         sources: [d.source],
         notes: d.notes,
-        tags: [],
+        tags,
         history: [],
         nextFollowUp: iso,
       };
@@ -180,6 +193,9 @@ export function AddLeadSheet({ open, onOpenChange, mode = "add", lead }: Props) 
               rows={4}
               className="w-full px-3 py-2 border border-border bg-transparent text-sm resize-none focus:outline-none focus:border-foreground"
             />
+          </Field>
+          <Field label="Tags (comma-separated)">
+            <TextInput value={d.tags} onChange={(v) => set("tags", v)} placeholder="e.g. no website, referral" />
           </Field>
 
           <div className="mono text-muted-foreground">

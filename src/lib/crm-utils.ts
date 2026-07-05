@@ -35,6 +35,16 @@ export function qualityFromOpportunity(op: WebsiteOpportunity): Quality {
   }
 }
 
+export function normalizeTag(raw: string): string {
+  return raw.trim().toLowerCase().replace(/\s+/g, "-");
+}
+
+export function allTags(leads: Lead[]): string[] {
+  const set = new Set<string>();
+  for (const l of leads) for (const t of l.tags) set.add(t);
+  return Array.from(set).sort();
+}
+
 export const SOURCES = [
   "Yelp",
   "Facebook",
