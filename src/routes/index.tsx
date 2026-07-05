@@ -16,6 +16,7 @@ import { BulkBar } from "@/components/crm/BulkBar";
 import { CallAssistant } from "@/components/crm/CallAssistant";
 import { AddLeadSheet } from "@/components/crm/AddLeadSheet";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { Botanical, BotanicalDivider } from "@/components/crm/Botanical";
 import type { Lead } from "@/lib/types";
 
 export const Route = createFileRoute("/")({
@@ -175,9 +176,14 @@ function Dashboard() {
         </div>
 
         {/* masthead */}
-        <div className="max-w-[1500px] mx-auto px-8 pt-14 pb-16 border-b border-border">
-          <div className="mono text-muted-foreground">CRM — LOCAL BUSINESS OUTREACH — 2026</div>
-          <div className="mt-6 grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-10 items-end">
+        <div className="relative max-w-[1500px] mx-auto px-8 pt-14 pb-16 border-b border-border overflow-hidden">
+          <Botanical
+            variant="masthead"
+            className="absolute right-0 top-0 h-[130%] w-[38%] -mr-8 -mt-6 hidden md:block"
+            opacity={0.14}
+          />
+          <div className="relative mono text-muted-foreground">CRM — LOCAL BUSINESS OUTREACH — 2026</div>
+          <div className="relative mt-6 grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-10 items-end">
             <h1 className="font-display font-normal text-foreground lowercase tracking-tight leading-[0.95] text-[clamp(4rem,11vw,7rem)]">
               leads
             </h1>
@@ -291,6 +297,7 @@ function Dashboard() {
         {view === "analytics" && <AnalyticsView leads={leads} />}
 
         <footer className="border-t border-border pt-8 mt-16">
+          <BotanicalDivider className="mb-6" />
           <div className="mono text-muted-foreground text-center">
             FACEBOOK-ONLY BUSINESSES ARE OFTEN STRONG WEBSITE PROSPECTS — KEEP GOING
           </div>
