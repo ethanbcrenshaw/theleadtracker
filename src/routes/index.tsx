@@ -186,8 +186,8 @@ function Dashboard() {
           </div>
           <div className="relative mono text-muted-foreground">CRM — LOCAL BUSINESS OUTREACH — 2026</div>
           <div className="relative mt-6 grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-10 items-end">
-            <h1 className="font-display font-normal text-foreground lowercase tracking-tight leading-[0.95] text-[clamp(4rem,11vw,7rem)]">
-              leads
+            <h1 className="font-display font-normal lowercase tracking-tight leading-[0.95] text-[clamp(4rem,11vw,7rem)]">
+              <span className="text-[color:var(--sienna)]">leads</span>
             </h1>
             <p className="text-muted-foreground max-w-sm lg:text-right leading-relaxed text-sm">
               A working ledger for local businesses. Track, prioritize, and follow up on

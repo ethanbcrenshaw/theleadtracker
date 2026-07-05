@@ -4,6 +4,16 @@ import type { Quality, LeadStatus } from "@/lib/types";
  * Small rectangular ink-tag with a colored dot. Editorial print-catalog styling.
  */
 function DotTag({ label, dot }: { label: string; dot: string }) {
+  // Red-emphasis items render as red text with no dot — vintage editorial
+  // poster style — instead of a colored blob next to ink text.
+  const isRed = dot.includes("--sienna");
+  if (isRed) {
+    return (
+      <span className="mono inline-flex items-center whitespace-nowrap px-1.5 py-1 border border-[color:var(--sienna)] text-[color:var(--sienna)]">
+        {label}
+      </span>
+    );
+  }
   return (
     <span
       className="mono inline-flex items-center gap-1.5 whitespace-nowrap px-1.5 py-1 border border-border text-foreground"
