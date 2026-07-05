@@ -123,8 +123,9 @@ export function QueueView({ leads, onStartCall, presorted, emptyMessage, title }
               );
             })}
             {sorted.length === 0 && (
-              <li className="px-4 py-12 text-center mono text-muted-foreground">
-                {emptyMessage ?? "No leads match your filters."}
+              <li className="px-4 py-12 flex flex-col items-center gap-4 text-center mono text-muted-foreground">
+                <EmptyBotanical />
+                <div>{emptyMessage ?? "No leads match your filters."}</div>
               </li>
             )}
           </ul>
