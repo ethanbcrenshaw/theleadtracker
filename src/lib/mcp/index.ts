@@ -9,7 +9,7 @@ import scheduleFollowupTool from "./tools/schedule-followup";
 
 export default defineMcp({
   name: "lead-tracker-mcp",
-  title: "Lead Tracker CRM",
+  title: "lead bloom CRM",
   version: "0.1.0",
   instructions:
     "Tools for a local-business lead-tracking CRM. Use `list_leads`, `search_leads`, `get_lead`, and `list_followups_due` to read the pipeline. Use `update_lead_status`, `add_lead_note`, and `schedule_followup` to act on leads.",
