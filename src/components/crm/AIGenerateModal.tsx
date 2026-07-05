@@ -2,7 +2,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, X, Loader2, AlertCircle, Check, ExternalLink, Globe, Phone, MapPin } from "lucide-react";
 import { useLeads } from "@/lib/store";
-import type { Lead, LeadSource, WebsiteOpportunity } from "@/lib/types";
+import type { Lead, LeadEnrichment, LeadSource, WebsiteOpportunity } from "@/lib/types";
 
 interface Props { open: boolean; onClose: () => void }
 
@@ -31,6 +31,11 @@ type Candidate = {
   onlinePresence: string;
   websiteOpportunity: string;
   matchesFilter: boolean;
+  enrichment?: LeadEnrichment;
+  confidenceScore?: number;
+  confidenceEvidence?: string[];
+  unverified?: boolean;
+  unverifiedReason?: string;
   _id: string;
   _selected: boolean;
 };
@@ -134,6 +139,11 @@ export function AIGenerateModal({ open, onClose }: Props) {
         notes: r.sourceUrl ? `Discovered via: ${r.sourceUrl}` : "Discovered via web search.",
         tags: ["ai-found"],
         history: [],
+        enrichment: r.enrichment,
+        confidenceScore: r.confidenceScore,
+        confidenceEvidence: r.confidenceEvidence,
+        unverified: r.unverified,
+        unverifiedReason: r.unverifiedReason,
       };
     });
 
@@ -276,9 +286,28 @@ function CandidateRow({ c, onToggle }: { c: Candidate; onToggle: (id: string) =>
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline justify-between gap-2">
           <p className="font-display text-lg truncate">{c.business}</p>
-          <span className="mono text-muted-foreground shrink-0">{c.websiteOpportunity}</span>
+          <span className="mono text-muted-foreground shrink-0">
+            {typeof c.confidenceScore === "number" && (
+              <span className="mr-2 text-foreground">CONF {String(c.confidenceScore).padStart(2, "0")}</span>
+            )}
+            {c.websiteOpportunity}
+          </span>
         </div>
         <p className="text-xs text-muted-foreground mt-1">{c.onlinePresence}</p>
+        {c.unverified && (
+          <p className="mono mt-2 text-[color:var(--sienna)]">
+            ⚠ UNVERIFIED — {(c.unverifiedReason || "review before importing").toUpperCase()}
+          </p>
+        )}
+        {c.confidenceEvidence && c.confidenceEvidence.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {c.confidenceEvidence.slice(0, 8).map((chip, i) => (
+              <span key={i} className="mono border border-border px-1.5 py-0.5 text-muted-foreground">
+                {chip}
+              </span>
+            ))}
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[11px] text-muted-foreground">
           {(c.city || c.state) && <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" />{c.city}{c.state ? `, ${c.state}` : ""}</span>}
           {c.phone && <span className="inline-flex items-center gap-1"><Phone className="h-3 w-3" />{c.phone}</span>}
