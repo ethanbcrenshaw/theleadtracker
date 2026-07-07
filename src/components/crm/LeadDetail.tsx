@@ -3,9 +3,10 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Lead, LeadEnrichment, LeadProfileType, LeadStatus, WebsiteOpportunity } from "@/lib/types";
 import { useLeads } from "@/lib/store";
-import { StatusBadge, TagBadge } from "./Badges";
+import { StatusBadge, TagBadge, TierChip, EvidenceChip } from "./Badges";
 import { formatDate, normalizeTag, pitchAngle, sourceLinks } from "@/lib/crm-utils";
 import { AddLeadSheet } from "./AddLeadSheet";
+import { Botanical } from "./Botanical";
 
 interface Props {
   lead: Lead | null;
@@ -301,8 +302,20 @@ function DetailBody({
 }
 
 function LeadHero({ lead, onStartCall, onEdit }: { lead: Lead; onStartCall?: (lead: Lead) => void; onEdit?: () => void }) {
+  const rating = lead.enrichment?.reviews?.[0]?.rating;
+  const wStatus = lead.enrichment?.websiteStatus;
+  const wLabel =
+    wStatus === "good" ? "LIVE" :
+    wStatus === "outdated" ? "OUTDATED" :
+    wStatus === "none" ? "NONE" : "—";
+  const wTone =
+    wStatus === "good" ? "text-[color:var(--frog-ink)]" :
+    wStatus === "outdated" || wStatus === "none" ? "text-[color:var(--sienna)]" :
+    "text-muted-foreground";
   return (
     <div className="space-y-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
       <div>
         <div className="mono text-muted-foreground">— Contact</div>
         <h2 className="font-display text-4xl sm:text-5xl text-foreground leading-none mt-2 break-words">
@@ -319,6 +332,37 @@ function LeadHero({ lead, onStartCall, onEdit }: { lead: Lead; onStartCall?: (le
             </span>
           )}
         </div>
+      </div>
+        </div>
+        <div
+          aria-hidden
+          className="hidden sm:block border border-border shrink-0 p-2"
+          style={{ width: "88px", height: "112px" }}
+        >
+          <Botanical variant="hip" className="h-full w-full" opacity={0.85} />
+        </div>
+      </div>
+
+      {/* Boxed key figures — where the eye lands first. */}
+      <div className="flex flex-wrap gap-2">
+        {typeof lead.confidenceScore === "number" && (
+          <span className="figure-box">
+            <span className="mono text-muted-foreground">CONF</span>
+            <span className="font-display text-2xl leading-none text-foreground">
+              {String(lead.confidenceScore).padStart(2, "0")}
+            </span>
+          </span>
+        )}
+        <span className="figure-box">
+          <span className="mono text-muted-foreground">REVIEWS</span>
+          <span className={`font-display text-2xl leading-none ${rating ? "text-foreground" : "text-muted-foreground"}`}>
+            {rating ? `${rating}★` : "—"}
+          </span>
+        </span>
+        <span className="figure-box">
+          <span className="mono text-muted-foreground">WEBSITE</span>
+          <span className={`mono ${wTone}`} style={{ fontSize: "13px" }}>{wLabel}</span>
+        </span>
       </div>
 
       <div className="border-t border-border pt-4">
