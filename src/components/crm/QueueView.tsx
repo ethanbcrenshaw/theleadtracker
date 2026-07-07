@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Lead, WebsiteOpportunity } from "@/lib/types";
 import { LeadDetail } from "./LeadDetail";
 import { sortLeads } from "./LeadTable";
-import { TagBadge } from "./Badges";
+import { TagBadge, TierChip, EvidenceChip } from "./Badges";
 import { Botanical } from "./Botanical";
 
 interface Props {
@@ -88,7 +88,7 @@ export function QueueView({ leads, onStartCall, presorted, emptyMessage, title }
                   <button
                     onClick={() => handlePick(l)}
                     className={`w-full text-left px-5 py-4 flex items-start gap-4 hover:bg-foreground/[0.03] transition-colors ${
-                      isActive ? "lg:bg-foreground/[0.05] lg:border-l-2 lg:border-foreground" : ""
+                      isActive ? "lg:tint-frog lg:border-l-2 lg:border-[color:var(--frog-ink)]" : ""
                     }`}
                   >
                     <span className="mono text-muted-foreground w-8 shrink-0 pt-0.5">
@@ -109,14 +109,14 @@ export function QueueView({ leads, onStartCall, presorted, emptyMessage, title }
                       {(l.confidenceEvidence?.length ?? 0) > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1.5">
                           {typeof l.confidenceScore === "number" && (
-                            <span className="mono border border-foreground px-1.5 py-0.5 text-foreground">
-                              CONF {String(l.confidenceScore).padStart(2, "0")}
+                            <span className="figure-box mono text-foreground py-0.5">
+                              <span>CONF</span>
+                              <span className="font-display text-base leading-none">{String(l.confidenceScore).padStart(2, "0")}</span>
                             </span>
                           )}
-                          {l.confidenceEvidence!.slice(0, 4).map((chip, i) => (
-                            <span key={i} className="mono border border-border px-1.5 py-0.5 text-muted-foreground">
-                              {chip}
-                            </span>
+                          <TierChip tier={l.verificationTier} />
+                          {l.confidenceEvidence!.slice(0, 3).map((chip, i) => (
+                            <EvidenceChip key={i} label={chip} />
                           ))}
                         </div>
                       )}

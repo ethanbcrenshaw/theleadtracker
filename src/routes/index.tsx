@@ -23,6 +23,7 @@ import { TodayView, type TodayItem } from "@/components/crm/TodayView";
 import { DailyBriefing } from "@/components/crm/DailyBriefing";
 import { ReverifyButton } from "@/components/crm/ReverifyButton";
 import { AssistantPanel } from "@/components/crm/AssistantPanel";
+import { SectionHead } from "@/components/crm/SectionHead";
 import type { Lead } from "@/lib/types";
 
 export const Route = createFileRoute("/")({
@@ -330,7 +331,7 @@ function Dashboard() {
         </div>
       </header>
 
-      <main className="max-w-[1500px] mx-auto px-8 py-12 space-y-10">
+      <main className="max-w-[1500px] mx-auto px-8 py-12 space-y-16">
         <StatsCards leads={leads} />
 
         <div className="space-y-5">
@@ -382,9 +383,13 @@ function Dashboard() {
 
         {view === "today" && (
           <div className="space-y-3">
-            <div className="border-b-2 border-foreground/60 pb-2 flex items-baseline justify-between gap-4 flex-wrap">
-              <div className="mono text-foreground">TODAY</div>
-              <div className="flex items-center gap-4">
+            <SectionHead
+              number="01"
+              label="Today"
+              italicTitle="the worklist"
+              count={todayItems.length}
+              corner
+              right={
                 <div className="mono text-muted-foreground flex items-center gap-2">
                   <span>CAP</span>
                   <button
@@ -399,9 +404,8 @@ function Dashboard() {
                     aria-label="Increase cap"
                   >[ + ]</button>
                 </div>
-                <div className="mono text-muted-foreground">— {String(todayItems.length).padStart(3, "0")}</div>
-              </div>
-            </div>
+              }
+            />
             <div className="mono text-muted-foreground">{dateLine}</div>
           </div>
         )}
@@ -423,16 +427,16 @@ function Dashboard() {
           </div>
         )}
         {view === "hot" && (
-          <SectionHeader label="Hot, Not Called" count={hotLeads.length} />
+          <SectionHead number="01" label="Hot, Not Called" italicTitle="the pile" count={hotLeads.length} corner />
         )}
         {view === "followups" && (
-          <SectionHeader label="Follow-ups Due" count={followupLeads.length} />
+          <SectionHead number="01" label="Follow-ups Due" italicTitle="follow-ups" count={followupLeads.length} corner />
         )}
         {view === "pipeline" && (
-          <SectionHeader label="Pipeline" count={pipelineLeads.length} />
+          <SectionHead number="01" label="Pipeline" italicTitle="the pipeline" count={pipelineLeads.length} corner />
         )}
         {view === "all" && (
-          <SectionHeader label="All Leads" count={allFiltered.length} />
+          <SectionHead number="01" label="All Leads" italicTitle="the book" count={allFiltered.length} corner />
         )}
 
         {view === "today" && (
@@ -510,11 +514,3 @@ function Dashboard() {
   );
 }
 
-function SectionHeader({ label, count }: { label: string; count: number }) {
-  return (
-    <div className="border-b-2 border-foreground/60 pb-2 flex items-baseline justify-between">
-      <div className="mono text-foreground">{label.toUpperCase()}</div>
-      <div className="mono text-muted-foreground">— {String(count).padStart(3, "0")}</div>
-    </div>
-  );
-}

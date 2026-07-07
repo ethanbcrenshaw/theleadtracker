@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Lead } from "@/lib/types";
 import { LeadDetail } from "./LeadDetail";
 import { Botanical } from "./Botanical";
+import { TierChip, EvidenceChip } from "./Badges";
 
 export type TodayReasonTone = "overdue" | "today" | "hot";
 
@@ -49,14 +50,14 @@ export function TodayView({ items, onStartCall }: Props) {
                 it.tone === "overdue"
                   ? "text-[color:var(--sienna)]"
                   : it.tone === "today"
-                    ? "text-foreground"
+                    ? (it.reason === "CALLBACK TODAY" ? "text-[color:var(--frog-ink)]" : "text-foreground")
                     : "text-foreground";
               return (
                 <li key={l.id}>
                   <button
                     onClick={() => { setActiveId(l.id); setMobileOpen(true); }}
                     className={`w-full text-left px-5 py-4 flex items-start gap-4 hover:bg-foreground/[0.03] transition-colors ${
-                      isActive ? "lg:bg-foreground/[0.05] lg:border-l-2 lg:border-foreground" : ""
+                      isActive ? "lg:tint-frog lg:border-l-2 lg:border-[color:var(--frog-ink)]" : ""
                     }`}
                   >
                     <span className="mono text-muted-foreground w-8 shrink-0 pt-1">
@@ -78,14 +79,14 @@ export function TodayView({ items, onStartCall }: Props) {
                       {(l.confidenceEvidence?.length ?? 0) > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1.5">
                           {typeof l.confidenceScore === "number" && (
-                            <span className="mono border border-foreground px-1.5 py-0.5 text-foreground">
-                              CONF {String(l.confidenceScore).padStart(2, "0")}
+                            <span className="figure-box mono text-foreground py-0.5">
+                              <span>CONF</span>
+                              <span className="font-display text-base leading-none">{String(l.confidenceScore).padStart(2, "0")}</span>
                             </span>
                           )}
+                          <TierChip tier={l.verificationTier} />
                           {l.confidenceEvidence!.slice(0, 3).map((chip, i) => (
-                            <span key={i} className="mono border border-border px-1.5 py-0.5 text-muted-foreground">
-                              {chip}
-                            </span>
+                            <EvidenceChip key={i} label={chip} />
                           ))}
                         </div>
                       )}
@@ -108,7 +109,7 @@ export function TodayView({ items, onStartCall }: Props) {
             {items.length === 0 && (
               <li className="px-4 py-16 flex flex-col items-center gap-5 text-center mono text-muted-foreground">
                 <Botanical variant="sprig" className="h-28 w-24" opacity={0.8} />
-                <div className="font-display text-3xl text-foreground lowercase">clear for today</div>
+                <div className="font-display italic text-4xl text-[color:var(--frog-ink)] lowercase">clear for today</div>
                 <div>— nothing overdue, nothing scheduled, no hot leads waiting —</div>
               </li>
             )}

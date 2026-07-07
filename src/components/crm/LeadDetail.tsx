@@ -3,9 +3,10 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Lead, LeadEnrichment, LeadProfileType, LeadStatus, WebsiteOpportunity } from "@/lib/types";
 import { useLeads } from "@/lib/store";
-import { StatusBadge, TagBadge } from "./Badges";
+import { StatusBadge, TagBadge, TierChip, EvidenceChip } from "./Badges";
 import { formatDate, normalizeTag, pitchAngle, sourceLinks } from "@/lib/crm-utils";
 import { AddLeadSheet } from "./AddLeadSheet";
+import { Botanical } from "./Botanical";
 
 interface Props {
   lead: Lead | null;
@@ -301,8 +302,20 @@ function DetailBody({
 }
 
 function LeadHero({ lead, onStartCall, onEdit }: { lead: Lead; onStartCall?: (lead: Lead) => void; onEdit?: () => void }) {
+  const rating = lead.enrichment?.reviews?.[0]?.rating;
+  const wStatus = lead.enrichment?.websiteStatus;
+  const wLabel =
+    wStatus === "good" ? "LIVE" :
+    wStatus === "outdated" ? "OUTDATED" :
+    wStatus === "none" ? "NONE" : "—";
+  const wTone =
+    wStatus === "good" ? "text-[color:var(--frog-ink)]" :
+    wStatus === "outdated" || wStatus === "none" ? "text-[color:var(--sienna)]" :
+    "text-muted-foreground";
   return (
     <div className="space-y-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
       <div>
         <div className="mono text-muted-foreground">— Contact</div>
         <h2 className="font-display text-4xl sm:text-5xl text-foreground leading-none mt-2 break-words">
@@ -319,6 +332,37 @@ function LeadHero({ lead, onStartCall, onEdit }: { lead: Lead; onStartCall?: (le
             </span>
           )}
         </div>
+      </div>
+        </div>
+        <div
+          aria-hidden
+          className="hidden sm:block border border-border shrink-0 p-2"
+          style={{ width: "88px", height: "112px" }}
+        >
+          <Botanical variant="hip" className="h-full w-full" opacity={0.85} />
+        </div>
+      </div>
+
+      {/* Boxed key figures — where the eye lands first. */}
+      <div className="flex flex-wrap gap-2">
+        {typeof lead.confidenceScore === "number" && (
+          <span className="figure-box">
+            <span className="mono text-muted-foreground">CONF</span>
+            <span className="font-display text-2xl leading-none text-foreground">
+              {String(lead.confidenceScore).padStart(2, "0")}
+            </span>
+          </span>
+        )}
+        <span className="figure-box">
+          <span className="mono text-muted-foreground">REVIEWS</span>
+          <span className={`font-display text-2xl leading-none ${rating ? "text-foreground" : "text-muted-foreground"}`}>
+            {rating ? `${rating}★` : "—"}
+          </span>
+        </span>
+        <span className="figure-box">
+          <span className="mono text-muted-foreground">WEBSITE</span>
+          <span className={`mono ${wTone}`} style={{ fontSize: "13px" }}>{wLabel}</span>
+        </span>
       </div>
 
       <div className="border-t border-border pt-4">
@@ -710,23 +754,14 @@ function Dossier({ lead, updateLead }: { lead: Lead; updateLead: (id: string, pa
         )}
         <div className="flex flex-wrap items-center gap-1.5">
           {typeof conf === "number" && (
-            <span className="mono border border-foreground px-1.5 py-1 text-foreground">
-              CONF {String(conf).padStart(2, "0")}
+            <span className="figure-box">
+              <span className="mono text-muted-foreground">CONF</span>
+              <span className="font-display text-lg leading-none text-foreground">{String(conf).padStart(2, "0")}</span>
             </span>
           )}
-          {lead.verificationTier && (
-            <span className={`mono border px-1.5 py-1 ${
-              lead.verificationTier === "verified" ? "border-foreground text-foreground"
-              : lead.verificationTier === "unverified" ? "border-[color:var(--sienna)] text-[color:var(--sienna)]"
-              : "border-border text-muted-foreground"
-            }`}>
-              {lead.verificationTier.toUpperCase()}
-            </span>
-          )}
+          <TierChip tier={lead.verificationTier} />
           {evidence.map((chip, i) => (
-            <span key={i} className="mono border border-border px-1.5 py-1 text-muted-foreground">
-              {chip}
-            </span>
+            <EvidenceChip key={i} label={chip} />
           ))}
         </div>
         {(lead.verificationReasons?.length ?? 0) > 0 && (
@@ -810,13 +845,17 @@ function Dossier({ lead, updateLead }: { lead: Lead; updateLead: (id: string, pa
       <div>
         <div className="mono text-muted-foreground mb-2">— Pitch Angle</div>
         {lead.unverified ? (
-          <p className="mono text-[color:var(--sienna)] leading-relaxed">
+          <p className="mono text-[color:var(--sienna)] leading-relaxed border border-[color:var(--sienna)] p-4">
             {e.pitchAngle || `⚠ Poor prospect — ${(lead.unverifiedReason || "unverified").toLowerCase()}. Skip or verify basics before spending call time.`}
           </p>
-        ) : e.pitchAngle ? (
-          <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">{e.pitchAngle}</p>
         ) : (
-          <p className="text-sm text-foreground/85 leading-relaxed">{pitchAngle(lead)}</p>
+          <div className="border border-border tint-frog p-4">
+            {e.pitchAngle ? (
+              <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{e.pitchAngle}</p>
+            ) : (
+              <p className="text-sm text-foreground leading-relaxed">{pitchAngle(lead)}</p>
+            )}
+          </div>
         )}
       </div>
 

@@ -29,18 +29,18 @@ function DotTag({ label, dot }: { label: string; dot: string }) {
 
 function qualityDot(q: Quality): string {
   if (q === "High") return "var(--sienna)";
-  if (q === "Medium") return "var(--olive)";
+  if (q === "Medium") return "var(--frog-ink)";
   return "color-mix(in oklab, var(--foreground) 45%, transparent)";
 }
 
 function statusDot(s: LeadStatus): string {
   switch (s) {
     case "Not Called":     return "color-mix(in oklab, var(--foreground) 25%, transparent)";
-    case "Called":         return "var(--olive)";
+    case "Called":         return "var(--frog-ink)";
     case "Voicemail":      return "color-mix(in oklab, var(--foreground) 40%, transparent)";
     case "Callback Scheduled": return "var(--sienna)";
-    case "Zoom Booked":    return "var(--olive)";
-    case "Sold":           return "var(--olive)";
+    case "Zoom Booked":    return "var(--frog-ink)";
+    case "Sold":           return "var(--frog-ink)";
     case "Not Interested": return "color-mix(in oklab, var(--foreground) 30%, transparent)";
   }
 }
@@ -51,6 +51,39 @@ export function QualityBadge({ q }: { q: Quality }) {
 
 export function StatusBadge({ s }: { s: LeadStatus }) {
   return <DotTag label={s} dot={statusDot(s)} />;
+}
+
+/**
+ * Verification-tier chip. Green for VERIFIED (positive/confirmed),
+ * red for UNVERIFIED (warning), ink for PARTIAL (neutral).
+ */
+export function TierChip({ tier }: { tier: "verified" | "partial" | "unverified" | null | undefined }) {
+  if (!tier) return null;
+  const cls =
+    tier === "verified"
+      ? "border-[color:var(--frog-ink)] text-[color:var(--frog-ink)]"
+      : tier === "unverified"
+        ? "border-[color:var(--sienna)] text-[color:var(--sienna)]"
+        : "border-border text-muted-foreground";
+  return (
+    <span className={`mono border px-1.5 py-0.5 ${cls}`}>
+      {tier.toUpperCase()}
+    </span>
+  );
+}
+
+/**
+ * Evidence chip — chips that confirm health (phone matches FB/GMB, site
+ * verified live, etc.) render in green. Others stay ink-muted.
+ */
+export function EvidenceChip({ label }: { label: string }) {
+  const positive =
+    /(matches?|verified|live|reachable|confirmed|found)/i.test(label) &&
+    !/(no|not|missing|failed|unreachable|didn't|closed|mismatch)/i.test(label);
+  const cls = positive
+    ? "border-[color:var(--frog-ink)] text-[color:var(--frog-ink)]"
+    : "border-border text-muted-foreground";
+  return <span className={`mono border px-1.5 py-0.5 ${cls}`}>{label}</span>;
 }
 
 /**

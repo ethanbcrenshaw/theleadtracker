@@ -329,7 +329,7 @@ export function DailyBriefing({
   const briefingText = briefing ?? (briefingErr ? fallbackBriefing : null);
 
   return (
-    <div className="border border-border p-6 relative overflow-hidden">
+    <div className="border border-border tint-frog p-6 relative overflow-hidden">
       <div
         aria-hidden
         className="pointer-events-none absolute -top-6 -right-4 w-40 opacity-40 hidden md:block"
@@ -338,7 +338,10 @@ export function DailyBriefing({
       </div>
 
       <div className="flex items-baseline justify-between gap-4 border-b border-border pb-2 mb-3">
-        <div className="mono text-foreground">— DAILY BRIEFING</div>
+        <div className="flex items-baseline gap-4 flex-wrap">
+          <div className="mono text-muted-foreground">02 — DAILY BRIEFING</div>
+          <div className="font-display italic lowercase text-foreground leading-none" style={{ fontSize: "22px" }}>the state of the board</div>
+        </div>
         <button
           onClick={() => void fetchBriefing(true)}
           disabled={briefingLoading}

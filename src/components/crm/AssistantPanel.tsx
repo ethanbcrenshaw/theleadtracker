@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Loader2, Send } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useLeads } from "@/lib/store";
+import { BloomFlower } from "./BloomFlower";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as any;
@@ -148,7 +149,13 @@ export function AssistantPanel({ open, onClose }: Props) {
 
             <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
               {messages.length === 0 && (
-                <div className="mono text-muted-foreground leading-relaxed">{HINT}</div>
+                <div className="space-y-5">
+                  <div aria-hidden className="flex justify-center py-4 text-foreground">
+                    <BloomFlower className="h-20 w-20" />
+                  </div>
+                  <div className="mono text-muted-foreground text-center">— what i can do —</div>
+                  <div className="mono text-muted-foreground leading-relaxed text-center">{HINT}</div>
+                </div>
               )}
               {messages.map((m) => (
                 <div key={m.id} className="space-y-2">
@@ -235,7 +242,7 @@ function ConfirmationCard({ pending, onConfirm, onCancel, busy }: {
   const [typed, setTyped] = useState("");
   const canConfirm = !busy && (!requireTyped || typed === "DELETE ALL");
   return (
-    <div className="border border-foreground p-4 space-y-3">
+    <div className="border border-foreground tint-frog p-4 space-y-3">
       <div className="mono text-foreground">
         {pending.kind === "delete" ? "CONFIRM DELETE" : "CONFIRM BULK UPDATE"}
       </div>

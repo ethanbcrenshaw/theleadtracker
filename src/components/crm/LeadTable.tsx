@@ -1,6 +1,6 @@
 import { ChevronDown, ArrowUp, ArrowDown } from "lucide-react";
 import type { Lead, LeadStatus, Quality } from "@/lib/types";
-import { QualityBadge, StatusBadge, TagBadge } from "./Badges";
+import { QualityBadge, StatusBadge, TagBadge, TierChip, EvidenceChip } from "./Badges";
 import { Botanical } from "./Botanical";
 import { formatDate, isValidContactDate, relativeFollowUp, STATUSES } from "@/lib/crm-utils";
 import { useMemo, useState } from "react";
@@ -191,13 +191,7 @@ export function LeadTable({ leads, selected, toggleSelect, toggleAll, onView, on
                   )}
                   {l.verificationTier && (
                     <div className="mt-1.5 flex items-center gap-2">
-                      <span className={`mono border px-1.5 py-0.5 ${
-                        l.verificationTier === "verified" ? "border-foreground text-foreground"
-                        : l.verificationTier === "unverified" ? "border-[color:var(--sienna)] text-[color:var(--sienna)]"
-                        : "border-border text-muted-foreground"
-                      }`}>
-                        {l.verificationTier.toUpperCase()}
-                      </span>
+                      <TierChip tier={l.verificationTier} />
                       {l.unverified && (
                         <span className="mono text-[color:var(--sienna)]">
                           ⚠ {(l.unverifiedReason || "review").toUpperCase()}
@@ -208,14 +202,13 @@ export function LeadTable({ leads, selected, toggleSelect, toggleAll, onView, on
                   {(l.confidenceEvidence?.length ?? 0) > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1.5">
                       {typeof l.confidenceScore === "number" && (
-                        <span className="mono border border-foreground px-1.5 py-0.5 text-foreground">
-                          CONF {String(l.confidenceScore).padStart(2, "0")}
+                        <span className="figure-box mono text-foreground py-0.5">
+                          <span>CONF</span>
+                          <span className="font-display text-base leading-none">{String(l.confidenceScore).padStart(2, "0")}</span>
                         </span>
                       )}
-                      {l.confidenceEvidence!.slice(0, 5).map((chip, i) => (
-                        <span key={i} className="mono border border-border px-1.5 py-0.5 text-muted-foreground">
-                          {chip}
-                        </span>
+                      {l.confidenceEvidence!.slice(0, 3).map((chip, i) => (
+                        <EvidenceChip key={i} label={chip} />
                       ))}
                     </div>
                   )}

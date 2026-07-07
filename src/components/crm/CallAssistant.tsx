@@ -412,6 +412,8 @@ function ConfirmPanel({
 }) {
   const set = <K extends keyof Updates>(k: K, v: Updates[K]) => setUpdates({ ...updates, [k]: v });
   const statusChanging = updates.suggestedStatus !== currentStatus;
+  const positiveStatuses: LeadStatus[] = ["Zoom Booked", "Sold", "Callback Scheduled"];
+  const isPositive = updates.interested || positiveStatuses.includes(updates.suggestedStatus);
 
   return (
     <section className="space-y-6">
@@ -434,7 +436,11 @@ function ConfirmPanel({
         <input
           value={updates.outcome}
           onChange={(e) => set("outcome", e.target.value)}
-          className="w-full bg-transparent border border-border p-2 mono text-foreground focus:outline-none focus:border-foreground"
+          className={`w-full bg-transparent border p-2 mono focus:outline-none focus:border-foreground ${
+            isPositive
+              ? "border-[color:var(--frog-ink)] text-[color:var(--frog-ink)]"
+              : "border-border text-foreground"
+          }`}
           style={{ fontSize: "12px" }}
         />
         <div className="flex flex-wrap gap-3 mt-2 mono text-muted-foreground">
