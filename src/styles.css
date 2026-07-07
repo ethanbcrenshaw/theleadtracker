@@ -230,3 +230,22 @@
   text-underline-offset: 3px;
   text-decoration-color: color-mix(in oklab, var(--foreground) 40%, transparent);
 }
+
+@utility tint-frog {
+  background-color: var(--frog-tint);
+}
+
+/* Double-rule newspaper divider: 2px bold + 1px hairline with 3px gap. */
+@utility double-rule-b {
+  border-bottom: 2px solid color-mix(in oklab, var(--foreground) 70%, transparent);
+  box-shadow: 0 4px 0 -3px var(--color-border);
+}
+
+@utility figure-box {
+  border: 1px solid var(--color-border);
+  padding: 0.5rem 0.75rem;
+  min-width: 4.5rem;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
