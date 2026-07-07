@@ -220,13 +220,6 @@ export function AssistantPanel({ open, onClose }: Props) {
 function ConfirmationCard({ pending, onConfirm, onCancel, busy }: {
   pending: PendingAction; onConfirm: (typed?: string) => void; onCancel: () => void; busy: boolean;
 }) {
-  // NB: rendered above
-  return _ConfirmationCard({ pending, onConfirm, onCancel, busy });
-}
-
-function _ConfirmationCard({ pending, onConfirm, onCancel, busy }: {
-  pending: PendingAction; onConfirm: (typed?: string) => void; onCancel: () => void; busy: boolean;
-}) {
   const requireTyped = pending.kind === "delete" && pending.requireTyped;
   const [typed, setTyped] = useState("");
   const canConfirm = !busy && (!requireTyped || typed === "DELETE ALL");
