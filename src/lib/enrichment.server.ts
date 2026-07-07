@@ -518,17 +518,25 @@ export async function enrichLeadFull(
   }
 
   // ── Verification tier ────────────────────────────────────────────────────
-  // VERIFIED: identity-matched profile OR verified live site, no closure markers,
-  //           and website claim (if any) resolved cleanly.
-  // UNVERIFIED: closed on page, or nothing at all matched.
-  // PARTIAL: everything else.
+  // VERIFIED: no closure markers AND (an identity-matched profile OR a
+  //           website URL we fetched and evaluated). Sibling profiles that
+  //           failed identity matching are already dropped from the presence
+  //           map — they no longer count against the tier.
+  // UNVERIFIED: closure markers on a real page, or truly nothing matched.
+  // PARTIAL: leads with only unverified sibling profiles (IG, directories)
+  //          and no matched anchor.
   let tier: VerificationTier;
-  const websiteClaimResolved = !input.website || websiteStatus === "good" || websiteStatus === "outdated";
+  const websiteResolvedAlive = websiteStatus === "good" || websiteStatus === "outdated";
+  const websiteClaimBroken = !!input.website && websiteStatus === "none";
   if (closureReason) {
     tier = "unverified";
-  } else if ((anyIdentityMatch || websiteStatus === "good") && websiteClaimResolved && !profileMatchFailed) {
+  } else if (anyIdentityMatch || websiteResolvedAlive) {
     tier = "verified";
-  } else if (!anyIdentityMatch && !websiteClaimResolved && profileCount === 0) {
+  } else if (!anyIdentityMatch && websiteClaimBroken && profileCount === 0) {
+    tier = "unverified";
+    if (!unverifiedReason) unverifiedReason = "no verifiable presence";
+    unverified = true;
+  } else if (!anyIdentityMatch && !input.website && profileCount === 0) {
     tier = "unverified";
     if (!unverifiedReason) unverifiedReason = "no verifiable presence";
     unverified = true;
