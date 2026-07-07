@@ -714,12 +714,34 @@ function Dossier({ lead, updateLead }: { lead: Lead; updateLead: (id: string, pa
               CONF {String(conf).padStart(2, "0")}
             </span>
           )}
+          {lead.verificationTier && (
+            <span className={`mono border px-1.5 py-1 ${
+              lead.verificationTier === "verified" ? "border-foreground text-foreground"
+              : lead.verificationTier === "unverified" ? "border-[color:var(--sienna)] text-[color:var(--sienna)]"
+              : "border-border text-muted-foreground"
+            }`}>
+              {lead.verificationTier.toUpperCase()}
+            </span>
+          )}
           {evidence.map((chip, i) => (
             <span key={i} className="mono border border-border px-1.5 py-1 text-muted-foreground">
               {chip}
             </span>
           ))}
         </div>
+        {(lead.verificationReasons?.length ?? 0) > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {lead.verificationReasons!.map((r, i) => (
+              <span key={i} className={`mono border px-1.5 py-0.5 ${
+                /unreachable|didn't match|closed|failed/i.test(r)
+                  ? "border-[color:var(--sienna)] text-[color:var(--sienna)]"
+                  : "border-border text-muted-foreground"
+              }`}>
+                {r}
+              </span>
+            ))}
+          </div>
+        )}
         {lead.unverified && (
           <div className="mono text-[color:var(--sienna)] border border-[color:var(--sienna)] px-3 py-2">
             ⚠ UNVERIFIED — {(lead.unverifiedReason || "review before calling").toUpperCase()}

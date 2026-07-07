@@ -68,6 +68,8 @@ export const Route = createFileRoute("/api/enrich-lead")({
             confidenceEvidence: result.confidenceEvidence,
             unverified: result.unverified,
             unverifiedReason: result.unverifiedReason ?? null,
+            verificationTier: result.verificationTier,
+            verificationReasons: result.verificationReasons,
           };
 
           const { error: updErr } = await supabase.from("leads").update(patch).eq("id", leadId);

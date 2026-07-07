@@ -21,6 +21,7 @@ import { Wordmark } from "@/components/crm/Wordmark";
 import { BloomFlower } from "@/components/crm/BloomFlower";
 import { TodayView, type TodayItem } from "@/components/crm/TodayView";
 import { DailyBriefing } from "@/components/crm/DailyBriefing";
+import { ReverifyButton } from "@/components/crm/ReverifyButton";
 import type { Lead } from "@/lib/types";
 
 export const Route = createFileRoute("/")({
@@ -205,7 +206,8 @@ function Dashboard() {
           l.quality === "High" &&
           l.status === "Not Called" &&
           !isValidContactDate(l.lastContacted) &&
-          !l.unverified,
+          !l.unverified &&
+          (l.verificationTier ?? "partial") === "verified",
       )
       .sort((a, b) => {
         const ac = a.confidenceScore ?? -1;
@@ -411,6 +413,11 @@ function Dashboard() {
             onOpenLead={(l) => setActive(l)}
             onJumpToPipeline={() => setView("pipeline")}
           />
+        )}
+        {view === "today" && (
+          <div className="border-t border-border pt-4">
+            <ReverifyButton />
+          </div>
         )}
         {view === "hot" && (
           <SectionHeader label="Hot, Not Called" count={hotLeads.length} />

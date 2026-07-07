@@ -44,6 +44,8 @@ export type Database = {
           tags: Json
           unverified: boolean
           unverifiedReason: string | null
+          verificationReasons: Json
+          verificationTier: string | null
           websiteOpportunity: string
           zoomBooked: boolean | null
           zoomDate: string | null
@@ -77,6 +79,8 @@ export type Database = {
           tags?: Json
           unverified?: boolean
           unverifiedReason?: string | null
+          verificationReasons?: Json
+          verificationTier?: string | null
           websiteOpportunity?: string
           zoomBooked?: boolean | null
           zoomDate?: string | null
@@ -110,6 +114,8 @@ export type Database = {
           tags?: Json
           unverified?: boolean
           unverifiedReason?: string | null
+          verificationReasons?: Json
+          verificationTier?: string | null
           websiteOpportunity?: string
           zoomBooked?: boolean | null
           zoomDate?: string | null

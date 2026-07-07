@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, X, Loader2, AlertCircle, Check, ExternalLink, Globe, Phone, MapPin } from "lucide-react";
 import { useLeads } from "@/lib/store";
-import type { Lead, LeadEnrichment, LeadSource, WebsiteOpportunity } from "@/lib/types";
+import type { Lead, LeadEnrichment, LeadSource, VerificationTier, WebsiteOpportunity } from "@/lib/types";
 
 interface Props {
   open: boolean;
@@ -36,26 +36,45 @@ type Candidate = {
   onlinePresence: string;
   websiteOpportunity: string;
   matchesFilter: boolean;
+  // filled during enrichment phase
   enrichment?: LeadEnrichment;
   confidenceScore?: number;
   confidenceEvidence?: string[];
   unverified?: boolean;
   unverifiedReason?: string;
+  verificationTier?: VerificationTier;
+  verificationReasons?: string[];
   _id: string;
   _selected: boolean;
+  _enrichState: "pending" | "running" | "done" | "failed";
 };
+
+type Phase = "form" | "searching" | "enriching" | "review";
+
+const ENRICH_CONCURRENCY = 3;
+
+async function runConcurrent<T>(items: T[], limit: number, fn: (item: T, idx: number) => Promise<void>) {
+  let i = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (i < items.length) {
+      const idx = i++;
+      try { await fn(items[idx], idx); } catch { /* swallow per-item */ }
+    }
+  });
+  await Promise.all(workers);
+}
 
 export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }: Props) {
   const addLeads = useLeads((s) => s.addLeads);
   const existing = useLeads((s) => s.leads);
   const [industry, setIndustry] = useState("Upholstery");
   const [city, setCity] = useState("Nashville, TN");
-  const [count, setCount] = useState(5);
+  const [count, setCount] = useState(8);
   const [type, setType] = useState<WebsiteOpportunity>("No Dedicated Website");
-  const [loading, setLoading] = useState(false);
+  const [phase, setPhase] = useState<Phase>("form");
   const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState("");
-  const [candidates, setCandidates] = useState<Candidate[] | null>(null);
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [enrichDone, setEnrichDone] = useState(0);
 
   useEffect(() => {
     if (!open) return;
@@ -64,18 +83,16 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
   }, [open, initialIndustry, initialCity]);
 
   function reset() {
-    setCandidates(null);
+    setCandidates([]);
     setError(null);
-    setStatus("");
-    setLoading(false);
+    setPhase("form");
+    setEnrichDone(0);
   }
-
   function close() { reset(); onClose(); }
 
-  async function search() {
-    setLoading(true);
+  async function start() {
     setError(null);
-    setStatus("Searching the web & verifying each business…");
+    setPhase("searching");
     try {
       const res = await fetch("/api/generate-leads", {
         method: "POST",
@@ -99,30 +116,83 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
         .map((r: Candidate, i: number) => ({
           ...r,
           _id: `${i}-${r.business}`,
-          _selected: r.matchesFilter, // pre-select exact matches
+          _selected: false,
+          _enrichState: "pending" as const,
         }));
 
       if (!raw.length) {
         setError("No new leads found. Try a different city or lead type.");
-        setLoading(false);
+        setPhase("form");
         return;
       }
+
       setCandidates(raw);
-      setLoading(false);
-      setStatus("");
+      setPhase("enriching");
+      setEnrichDone(0);
+
+      // Enrich every candidate (no cap) — concurrency 3.
+      await runConcurrent(raw, ENRICH_CONCURRENCY, async (cand) => {
+        cand._enrichState = "running";
+        setCandidates((cs) => [...cs]);
+        try {
+          const r = await fetch("/api/enrich-candidate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              business: cand.business,
+              city: cand.city,
+              state: cand.state,
+              phone: cand.phone,
+              website: cand.website,
+              websiteOpportunity: cand.websiteOpportunity,
+            }),
+          });
+          const j = await r.json();
+          if (!r.ok || !j.ok) throw new Error(j.error || `enrich ${r.status}`);
+          const result = j.result;
+          cand.enrichment = result.enrichment;
+          cand.confidenceScore = result.confidenceScore;
+          cand.confidenceEvidence = result.confidenceEvidence;
+          cand.unverified = result.unverified;
+          cand.unverifiedReason = result.unverifiedReason;
+          cand.verificationTier = result.verificationTier;
+          cand.verificationReasons = result.verificationReasons;
+
+          // Reflect verified website status back onto the opp label.
+          const ws = result.enrichment?.websiteStatus;
+          if (ws === "none" && cand.website) {
+            cand.websiteOpportunity = "No Dedicated Website";
+            cand.onlinePresence = `Claimed site (${cand.website}) unreachable`;
+            cand.website = null;
+          } else if (ws === "outdated") {
+            cand.websiteOpportunity = "Outdated Website";
+          }
+          cand._enrichState = "done";
+        } catch {
+          cand.verificationTier = "partial";
+          cand.verificationReasons = ["enrichment failed — could not verify"];
+          cand.confidenceScore = 20;
+          cand.confidenceEvidence = ["enrichment failed"];
+          cand._enrichState = "failed";
+        }
+        setEnrichDone((n) => n + 1);
+        setCandidates((cs) => [...cs]);
+      });
+
+      // Pre-select only VERIFIED candidates after enrichment.
+      setCandidates((cs) => cs.map((c) => ({ ...c, _selected: c.verificationTier === "verified" })));
+      setPhase("review");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
-      setLoading(false);
-      setStatus("");
+      setPhase("form");
     }
   }
 
   function toggle(id: string) {
-    setCandidates((cs) => cs?.map((c) => (c._id === id ? { ...c, _selected: !c._selected } : c)) ?? null);
+    setCandidates((cs) => cs.map((c) => (c._id === id ? { ...c, _selected: !c._selected } : c)));
   }
 
   function importSelected() {
-    if (!candidates) return;
     const picked = candidates.filter((c) => c._selected);
     if (!picked.length) return;
     const basePriority = (existing.reduce((m, l) => Math.max(m, l.priority), 0) || 0) + 1;
@@ -155,6 +225,8 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
         confidenceEvidence: r.confidenceEvidence,
         unverified: r.unverified,
         unverifiedReason: r.unverifiedReason,
+        verificationTier: r.verificationTier,
+        verificationReasons: r.verificationReasons,
       };
     });
 
@@ -162,9 +234,10 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
     close();
   }
 
-  const exactMatches = candidates?.filter((c) => c.matchesFilter) ?? [];
-  const closeMatches = candidates?.filter((c) => !c.matchesFilter) ?? [];
-  const selectedCount = candidates?.filter((c) => c._selected).length ?? 0;
+  const verified = candidates.filter((c) => c.verificationTier === "verified");
+  const partial = candidates.filter((c) => c.verificationTier === "partial");
+  const unverified = candidates.filter((c) => c.verificationTier === "unverified");
+  const selectedCount = candidates.filter((c) => c._selected).length;
 
   return (
     <AnimatePresence>
@@ -176,12 +249,15 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
             initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0, y:10}}
             className="fixed inset-0 z-50 grid place-items-center p-4 pointer-events-none"
           >
-            <div className={`bg-background border border-foreground w-full pointer-events-auto ${candidates ? "max-w-3xl" : "max-w-md"} max-h-[90vh] flex flex-col`}>
+            <div className={`bg-background border border-foreground w-full pointer-events-auto ${phase === "review" || phase === "enriching" ? "max-w-3xl" : "max-w-md"} max-h-[90vh] flex flex-col`}>
               <div className="flex items-center justify-between p-6 pb-4 border-b border-border">
                 <div>
                   <div className="mono text-muted-foreground">— AI Generate</div>
                   <h2 className="font-display text-2xl mt-1 lowercase font-normal">
-                    {candidates ? "review found leads" : "generate leads"}
+                    {phase === "review" ? "review found leads"
+                      : phase === "enriching" ? "verifying leads"
+                      : phase === "searching" ? "searching"
+                      : "generate leads"}
                   </h2>
                 </div>
                 <div className="flex items-center gap-3">
@@ -190,10 +266,12 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
                 </div>
               </div>
 
-              {!candidates ? (
+              {phase === "form" && (
                 <div className="p-6 overflow-y-auto">
                   <p className="mono text-muted-foreground mb-4">
-                    Searches the live web, then verifies each business's actual online presence before importing.
+                    Searches the live web, then <span className="text-foreground">actually fetches</span> each
+                    candidate's website and profile pages to verify they exist and belong to this business.
+                    Slower — takes a couple of minutes for a full batch — but every claim is checked.
                   </p>
                   <div className="space-y-3">
                     <Field label="Industry"><input value={industry} onChange={(e) => setIndustry(e.target.value)} className="input" /></Field>
@@ -217,37 +295,76 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
                     </div>
                   )}
                   <button
-                    onClick={search}
-                    disabled={loading}
-                    className="mono mt-5 w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-foreground text-background hover:opacity-90 disabled:opacity-60"
+                    onClick={start}
+                    className="mono mt-5 w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-foreground text-background hover:opacity-90"
                   >
-                    {loading
-                      ? <><Loader2 className="h-4 w-4 animate-spin" /> {status || "Working…"}</>
-                      : <><Sparkles className="h-3.5 w-3.5" /> [ FIND LEADS ]</>}
+                    <Sparkles className="h-3.5 w-3.5" /> [ FIND & VERIFY ]
                   </button>
                 </div>
-              ) : (
+              )}
+
+              {phase === "searching" && (
+                <div className="p-10 flex flex-col items-center gap-3">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <div className="mono text-muted-foreground">searching Google Places…</div>
+                </div>
+              )}
+
+              {phase === "enriching" && (
+                <div className="p-6 overflow-y-auto flex-1 space-y-4">
+                  <div className="mono text-foreground">
+                    RESEARCHING {String(enrichDone).padStart(2, "0")} / {String(candidates.length).padStart(2, "0")}
+                  </div>
+                  <div className="h-px bg-border">
+                    <div
+                      className="h-px bg-foreground transition-all"
+                      style={{ width: `${candidates.length ? (enrichDone / candidates.length) * 100 : 0}%` }}
+                    />
+                  </div>
+                  <ul className="divide-y divide-border border-y border-border">
+                    {candidates.map((c) => (
+                      <li key={c._id} className="py-2 flex items-center gap-3">
+                        <span className="mono text-muted-foreground w-20 shrink-0">
+                          {c._enrichState === "done" ? "✓ DONE"
+                            : c._enrichState === "failed" ? "✗ FAIL"
+                            : c._enrichState === "running" ? "…" : "—"}
+                        </span>
+                        <span className="text-sm text-foreground truncate flex-1">{c.business}</span>
+                        {c.verificationTier && <TierChip tier={c.verificationTier} />}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {phase === "review" && (
                 <>
                   <div className="p-6 pt-4 overflow-y-auto flex-1 space-y-6">
-                    {exactMatches.length > 0 && (
-                      <Section title={`Matches your filter (${exactMatches.length})`} subtitle={`These match "${type}".`}>
-                        {exactMatches.map((c) => <CandidateRow key={c._id} c={c} onToggle={toggle} />)}
+                    <p className="mono text-muted-foreground">
+                      Only VERIFIED leads are pre-selected. PARTIAL and UNVERIFIED candidates
+                      can be imported anyway with an explicit checkbox — read the reason first.
+                    </p>
+                    {verified.length > 0 && (
+                      <Section title={`Verified (${verified.length})`} subtitle="Fetched a live site or an identity-matched profile page. Safe to import.">
+                        {verified.map((c) => <CandidateRow key={c._id} c={c} onToggle={toggle} />)}
                       </Section>
                     )}
-                    {closeMatches.length > 0 && (
-                      <Section
-                        title={`Close matches (${closeMatches.length})`}
-                        subtitle={`Don't strictly match "${type}" but were found in your search. Review before adding.`}
-                      >
-                        {closeMatches.map((c) => <CandidateRow key={c._id} c={c} onToggle={toggle} />)}
+                    {partial.length > 0 && (
+                      <Section title={`Partial (${partial.length})`} subtitle="Some signals matched, but verification was incomplete. Review before importing.">
+                        {partial.map((c) => <CandidateRow key={c._id} c={c} onToggle={toggle} />)}
                       </Section>
                     )}
-                    {!exactMatches.length && !closeMatches.length && (
+                    {unverified.length > 0 && (
+                      <Section title={`Unverified (${unverified.length})`} subtitle="Failed verification — likely closed, wrong business, or no real presence.">
+                        {unverified.map((c) => <CandidateRow key={c._id} c={c} onToggle={toggle} />)}
+                      </Section>
+                    )}
+                    {!candidates.length && (
                       <p className="text-sm text-muted-foreground">No leads to review.</p>
                     )}
                   </div>
                   <div className="p-4 border-t border-border flex items-center justify-between gap-3">
-                    <button onClick={() => setCandidates(null)} className="mono ink-link">
+                    <button onClick={() => { setPhase("form"); setCandidates([]); }} className="mono ink-link">
                       [ BACK ]
                     </button>
                     <button
@@ -269,6 +386,14 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
   );
 }
 
+function TierChip({ tier }: { tier: VerificationTier }) {
+  const cls =
+    tier === "verified" ? "border-foreground text-foreground"
+    : tier === "unverified" ? "border-[color:var(--sienna)] text-[color:var(--sienna)]"
+    : "border-border text-muted-foreground";
+  return <span className={`mono border px-1.5 py-0.5 ${cls}`}>{tier.toUpperCase()}</span>;
+}
+
 function Section({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
   return (
     <div>
@@ -282,11 +407,13 @@ function Section({ title, subtitle, children }: { title: string; subtitle: strin
 }
 
 function CandidateRow({ c, onToggle }: { c: Candidate; onToggle: (id: string) => void }) {
+  const tier = c.verificationTier ?? "partial";
+  const dim = tier !== "verified";
   return (
     <label
       className={`flex items-start gap-3 p-3 border cursor-pointer transition ${
         c._selected ? "border-foreground bg-foreground/[0.04]" : "border-border hover:bg-foreground/[0.02]"
-      }`}
+      } ${dim && !c._selected ? "opacity-70" : ""}`}
     >
       <input
         type="checkbox"
@@ -295,25 +422,30 @@ function CandidateRow({ c, onToggle }: { c: Candidate; onToggle: (id: string) =>
         className="mt-1 h-4 w-4 rounded-none accent-foreground"
       />
       <div className="flex-1 min-w-0">
-        <div className="flex items-baseline justify-between gap-2">
+        <div className="flex items-baseline justify-between gap-2 flex-wrap">
           <p className="font-display text-lg truncate">{c.business}</p>
-          <span className="mono text-muted-foreground shrink-0">
+          <div className="flex items-center gap-2 mono text-muted-foreground shrink-0">
+            <TierChip tier={tier} />
             {typeof c.confidenceScore === "number" && (
-              <span className="mr-2 text-foreground">CONF {String(c.confidenceScore).padStart(2, "0")}</span>
+              <span className="text-foreground">CONF {String(c.confidenceScore).padStart(2, "0")}</span>
             )}
-            {c.websiteOpportunity}
-          </span>
+            <span>{c.websiteOpportunity}</span>
+          </div>
         </div>
         <p className="text-xs text-muted-foreground mt-1">{c.onlinePresence}</p>
         {c.unverified && (
           <p className="mono mt-2 text-[color:var(--sienna)]">
-            ⚠ UNVERIFIED — {(c.unverifiedReason || "review before importing").toUpperCase()}
+            ⚠ {(c.unverifiedReason || "review before importing").toUpperCase()}
           </p>
         )}
-        {c.confidenceEvidence && c.confidenceEvidence.length > 0 && (
+        {(c.verificationReasons?.length ?? 0) > 0 && (
           <div className="flex flex-wrap gap-1 mt-2">
-            {c.confidenceEvidence.slice(0, 8).map((chip, i) => (
-              <span key={i} className="mono border border-border px-1.5 py-0.5 text-muted-foreground">
+            {c.verificationReasons!.slice(0, 6).map((chip, i) => (
+              <span key={i} className={`mono border px-1.5 py-0.5 ${
+                /unreachable|didn't match|failed|closed/i.test(chip)
+                  ? "border-[color:var(--sienna)] text-[color:var(--sienna)]"
+                  : "border-border text-muted-foreground"
+              }`}>
                 {chip}
               </span>
             ))}

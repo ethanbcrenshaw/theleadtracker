@@ -189,9 +189,20 @@ export function LeadTable({ leads, selected, toggleSelect, toggleAll, onView, on
                   {l.ownerNote && (
                     <div className="text-xs text-muted-foreground mt-0.5 italic">{l.ownerNote}</div>
                   )}
-                  {l.unverified && (
-                    <div className="mono mt-1.5 text-[color:var(--sienna)]">
-                      ⚠ UNVERIFIED — {(l.unverifiedReason || "review").toUpperCase()}
+                  {l.verificationTier && (
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <span className={`mono border px-1.5 py-0.5 ${
+                        l.verificationTier === "verified" ? "border-foreground text-foreground"
+                        : l.verificationTier === "unverified" ? "border-[color:var(--sienna)] text-[color:var(--sienna)]"
+                        : "border-border text-muted-foreground"
+                      }`}>
+                        {l.verificationTier.toUpperCase()}
+                      </span>
+                      {l.unverified && (
+                        <span className="mono text-[color:var(--sienna)]">
+                          ⚠ {(l.unverifiedReason || "review").toUpperCase()}
+                        </span>
+                      )}
                     </div>
                   )}
                   {(l.confidenceEvidence?.length ?? 0) > 0 && (

@@ -69,6 +69,8 @@ export interface LeadEnrichment {
   recentActivity?: string;
   pitchAngle?: string;
   enrichedAt: string; // ISO
+  /** ISO timestamp of the last time the website URL was actually fetched and its content evaluated. */
+  lastVerifiedAt?: string;
 }
 
 export interface CallRecord {
@@ -108,6 +110,8 @@ export interface CallScript {
   enrichedAt?: string;
 }
 
+export type VerificationTier = "verified" | "partial" | "unverified";
+
 export interface Lead {
   id: string;
   priority: number;
@@ -139,4 +143,6 @@ export interface Lead {
   unverifiedReason?: string;
   enrichment?: LeadEnrichment;
   callScript?: CallScript;
+  verificationTier?: VerificationTier;
+  verificationReasons?: string[];
 }

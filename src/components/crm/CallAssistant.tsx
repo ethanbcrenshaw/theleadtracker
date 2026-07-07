@@ -33,6 +33,20 @@ export function CallAssistant({ lead, onClose }: Props) {
   const setStatus = useLeads((s) => s.setStatus);
   const addNote = useLeads((s) => s.addNote);
 
+  function flagBadData(reason: "wrong number" | "business closed" | "no such business") {
+    if (!lead) return;
+    updateLead(lead.id, {
+      unverified: true,
+      unverifiedReason: reason,
+      verificationTier: "unverified",
+      verificationReasons: [`bad data — ${reason}`, "flagged from call"],
+      nextFollowUp: undefined,
+    });
+    setStatus(lead.id, "Not Interested", `Bad data: ${reason}`);
+    addNote(lead.id, `⚠ BAD DATA — ${reason.toUpperCase()}`);
+    onClose();
+  }
+
   const [stage, setStage] = useState<Stage>("prep");
   const [notes, setNotes] = useState("");
   const [source, setSource] = useState<Source>("notes");
@@ -300,6 +314,26 @@ export function CallAssistant({ lead, onClose }: Props) {
                   >
                     [ STRUCTURE OUTCOME ]
                   </button>
+                </div>
+                <div className="mt-4 border-t border-border pt-3">
+                  <div className="mono text-muted-foreground mb-2">— BAD DATA —</div>
+                  <p className="mono text-muted-foreground mb-2">
+                    Flag this lead as unverified and drop it from TODAY.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => flagBadData("wrong number")}
+                      className="mono border border-[color:var(--sienna)] text-[color:var(--sienna)] px-2 py-1 hover:bg-[color:var(--sienna)] hover:text-background"
+                    >[ WRONG NUMBER ]</button>
+                    <button
+                      onClick={() => flagBadData("business closed")}
+                      className="mono border border-[color:var(--sienna)] text-[color:var(--sienna)] px-2 py-1 hover:bg-[color:var(--sienna)] hover:text-background"
+                    >[ BUSINESS CLOSED ]</button>
+                    <button
+                      onClick={() => flagBadData("no such business")}
+                      className="mono border border-[color:var(--sienna)] text-[color:var(--sienna)] px-2 py-1 hover:bg-[color:var(--sienna)] hover:text-background"
+                    >[ NO SUCH BUSINESS ]</button>
+                  </div>
                 </div>
               </section>
             </>
