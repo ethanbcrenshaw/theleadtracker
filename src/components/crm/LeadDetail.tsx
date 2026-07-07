@@ -754,23 +754,14 @@ function Dossier({ lead, updateLead }: { lead: Lead; updateLead: (id: string, pa
         )}
         <div className="flex flex-wrap items-center gap-1.5">
           {typeof conf === "number" && (
-            <span className="mono border border-foreground px-1.5 py-1 text-foreground">
-              CONF {String(conf).padStart(2, "0")}
+            <span className="figure-box">
+              <span className="mono text-muted-foreground">CONF</span>
+              <span className="font-display text-lg leading-none text-foreground">{String(conf).padStart(2, "0")}</span>
             </span>
           )}
-          {lead.verificationTier && (
-            <span className={`mono border px-1.5 py-1 ${
-              lead.verificationTier === "verified" ? "border-foreground text-foreground"
-              : lead.verificationTier === "unverified" ? "border-[color:var(--sienna)] text-[color:var(--sienna)]"
-              : "border-border text-muted-foreground"
-            }`}>
-              {lead.verificationTier.toUpperCase()}
-            </span>
-          )}
+          <TierChip tier={lead.verificationTier} />
           {evidence.map((chip, i) => (
-            <span key={i} className="mono border border-border px-1.5 py-1 text-muted-foreground">
-              {chip}
-            </span>
+            <EvidenceChip key={i} label={chip} />
           ))}
         </div>
         {(lead.verificationReasons?.length ?? 0) > 0 && (
@@ -854,13 +845,17 @@ function Dossier({ lead, updateLead }: { lead: Lead; updateLead: (id: string, pa
       <div>
         <div className="mono text-muted-foreground mb-2">— Pitch Angle</div>
         {lead.unverified ? (
-          <p className="mono text-[color:var(--sienna)] leading-relaxed">
+          <p className="mono text-[color:var(--sienna)] leading-relaxed border border-[color:var(--sienna)] p-4">
             {e.pitchAngle || `⚠ Poor prospect — ${(lead.unverifiedReason || "unverified").toLowerCase()}. Skip or verify basics before spending call time.`}
           </p>
-        ) : e.pitchAngle ? (
-          <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">{e.pitchAngle}</p>
         ) : (
-          <p className="text-sm text-foreground/85 leading-relaxed">{pitchAngle(lead)}</p>
+          <div className="border border-border tint-frog p-4">
+            {e.pitchAngle ? (
+              <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{e.pitchAngle}</p>
+            ) : (
+              <p className="text-sm text-foreground leading-relaxed">{pitchAngle(lead)}</p>
+            )}
+          </div>
         )}
       </div>
 
