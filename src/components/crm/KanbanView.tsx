@@ -1,17 +1,20 @@
 import type { Lead } from "@/lib/types";
 import { STATUSES } from "@/lib/crm-utils";
 import { QualityBadge, StatusBadge } from "./Badges";
+import { BotanicalDivider } from "./Botanical";
 
 interface Props { leads: Lead[]; onView: (l: Lead) => void }
 
 export function KanbanView({ leads, onView }: Props) {
   return (
-    <div className="grid grid-flow-col auto-cols-[280px] gap-3 overflow-x-auto pb-4">
+    <div className="space-y-4">
+      <BotanicalDivider />
+      <div className="grid grid-flow-col auto-cols-[280px] gap-3 overflow-x-auto pb-4">
       {STATUSES.map((status) => {
         const items = leads.filter((l) => l.status === status);
         return (
           <div key={status} className="border border-border p-3 min-h-[200px] bg-card">
-            <div className="flex items-center justify-between mb-3 pb-2 border-b border-border">
+            <div className="flex items-center justify-between mb-3 pb-2 border-b border-border tint-frog -m-3 mb-3 px-3 py-2">
               <StatusBadge s={status} />
               <span className="mono text-muted-foreground">{String(items.length).padStart(3, "0")}</span>
             </div>
@@ -40,6 +43,7 @@ export function KanbanView({ leads, onView }: Props) {
           </div>
         );
       })}
+      </div>
     </div>
   );
 }
