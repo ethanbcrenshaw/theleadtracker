@@ -194,6 +194,7 @@ interface LeadStore {
   leads: Lead[];
   hydrated: boolean;
   hydrate: () => Promise<void>;
+  refresh: () => Promise<void>;
   updateLead: (id: string, patch: Partial<Lead>) => void;
   addNote: (id: string, note: string) => void;
   setStatus: (id: string, status: LeadStatus, note?: string) => void;
@@ -216,6 +217,7 @@ export const useLeads = create<LeadStore>()((set) => ({
       try {
         const { data, error } = await db()
           .select("*")
+          .is("deleted_at", null)
           .order("priority", { ascending: true });
         if (error) throw error;
         const rows = (data ?? []) as LeadRow[];
@@ -241,6 +243,20 @@ export const useLeads = create<LeadStore>()((set) => ({
       }
     })();
     return hydratePromise;
+  },
+
+  refresh: async () => {
+    try {
+      const { data, error } = await db()
+        .select("*")
+        .is("deleted_at", null)
+        .order("priority", { ascending: true });
+      if (error) throw error;
+      const rows = (data ?? []) as LeadRow[];
+      set({ leads: rows.map(rowToLead), hydrated: true });
+    } catch (err) {
+      console.error("[leads] refresh failed:", err);
+    }
   },
 
   updateLead: (id, patch) => {

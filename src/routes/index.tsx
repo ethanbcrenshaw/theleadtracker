@@ -22,6 +22,7 @@ import { BloomFlower } from "@/components/crm/BloomFlower";
 import { TodayView, type TodayItem } from "@/components/crm/TodayView";
 import { DailyBriefing } from "@/components/crm/DailyBriefing";
 import { ReverifyButton } from "@/components/crm/ReverifyButton";
+import { AssistantPanel } from "@/components/crm/AssistantPanel";
 import type { Lead } from "@/lib/types";
 
 export const Route = createFileRoute("/")({
@@ -63,6 +64,7 @@ function Dashboard() {
   const setActive = (l: Lead | null) => setActiveId(l ? l.id : null);
   const [aiOpen, setAiOpen] = useState(false);
   const [aiPrefill, setAiPrefill] = useState<{ industry?: string; city?: string }>({});
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const [callLead, setCallLead] = useState<Lead | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [addOpen, setAddOpen] = useState(false);
@@ -288,6 +290,7 @@ function Dashboard() {
               <Wordmark size={22} />
             </div>
             <div className="flex items-center gap-6">
+              <button onClick={() => setAssistantOpen(true)} className="mono ink-link">[ ASSISTANT ]</button>
               <button onClick={() => setAiOpen(true)} className="mono ink-link">[ AI GENERATE ]</button>
               <button onClick={() => exportCSV(allFiltered)} className="mono ink-link">[ EXPORT CSV ]</button>
               <button onClick={() => setAddOpen(true)} className="mono px-3 py-1 bg-foreground text-background hover:opacity-90">
@@ -495,6 +498,7 @@ function Dashboard() {
           initialCity={aiPrefill.city}
         />
       <AddLeadSheet open={addOpen} onOpenChange={setAddOpen} />
+      <AssistantPanel open={assistantOpen} onClose={() => setAssistantOpen(false)} />
       <BulkBar
         count={selected.size}
         onClear={() => setSelected(new Set())}

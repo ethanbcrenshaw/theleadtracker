@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      assistant_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          pending_action: Json | null
+          role: string
+          tool_calls: Json | null
+          tool_results: Json | null
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          id?: string
+          pending_action?: Json | null
+          role: string
+          tool_calls?: Json | null
+          tool_results?: Json | null
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          pending_action?: Json | null
+          role?: string
+          tool_calls?: Json | null
+          tool_results?: Json | null
+        }
+        Relationships: []
+      }
       leads: {
         Row: {
           aiNextAction: string | null
@@ -25,6 +55,7 @@ export type Database = {
           confidenceEvidence: Json
           confidenceScore: number | null
           created_at: string
+          deleted_at: string | null
           enrichment: Json | null
           history: Json
           id: string
@@ -60,6 +91,7 @@ export type Database = {
           confidenceEvidence?: Json
           confidenceScore?: number | null
           created_at?: string
+          deleted_at?: string | null
           enrichment?: Json | null
           history?: Json
           id: string
@@ -95,6 +127,7 @@ export type Database = {
           confidenceEvidence?: Json
           confidenceScore?: number | null
           created_at?: string
+          deleted_at?: string | null
           enrichment?: Json | null
           history?: Json
           id?: string
