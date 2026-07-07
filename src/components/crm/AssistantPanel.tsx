@@ -28,6 +28,17 @@ interface Props { open: boolean; onClose: () => void; }
 
 const HINT = "Try: how many verified roofers do I have · generate 3 upholstery leads in Franklin, TN · re-verify partial leads · scrap all unverified · what's stale · research salons in Franklin";
 
+type CallStep = Extract<Step, { type: "tool_call" }>;
+type ResultStep = Extract<Step, { type: "tool_result" }>;
+
+function pairSteps(steps: Step[]): Array<{ call: CallStep; result?: ResultStep }> {
+  const out: Array<{ call: CallStep; result?: ResultStep }> = [];
+  const results = steps.filter((s): s is ResultStep => s.type === "tool_result");
+  const calls = steps.filter((s): s is CallStep => s.type === "tool_call");
+  calls.forEach((call, i) => out.push({ call, result: results[i] }));
+  return out;
+}
+
 export function AssistantPanel({ open, onClose }: Props) {
   const refresh = useLeads((s) => s.refresh);
   const [messages, setMessages] = useState<Msg[]>([]);
