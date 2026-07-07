@@ -172,7 +172,9 @@ type Body = {
 
 function normalizeName(s: string) { return s.toLowerCase().replace(/[^a-z0-9]/g, ""); }
 
-function makeSb() {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Sb = any;
+function makeSb(): Sb {
   const url = process.env.SUPABASE_URL!;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY!;
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -188,7 +190,7 @@ type LeadRow = Record<string, unknown> & {
   created_at?: string | null;
 };
 
-async function fetchLeads(sb: ReturnType<typeof createClient>, opts: {
+async function fetchLeads(sb: Sb, opts: {
   status?: string; tier?: string; quality?: string; city?: string;
   industry_or_segment?: string; stale_days?: number; scope?: string;
 }): Promise<LeadRow[]> {
@@ -222,7 +224,7 @@ async function fetchLeads(sb: ReturnType<typeof createClient>, opts: {
 
 // ─── Tool executor ───────────────────────────────────────────────────────────
 async function executeTool(
-  name: string, args: Record<string, unknown>, deps: { sb: ReturnType<typeof createClient>; origin: string },
+  name: string, args: Record<string, unknown>, deps: { sb: Sb; origin: string },
 ): Promise<{ result: unknown; label: string; summary: string; pending?: PendingAction }> {
   const sb = deps.sb;
 
