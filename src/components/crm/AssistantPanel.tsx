@@ -149,20 +149,16 @@ export function AssistantPanel({ open, onClose }: Props) {
                     <div className="space-y-2">
                       {m.steps && m.steps.length > 0 && (
                         <ul className="space-y-0.5">
-                          {m.steps.filter((s) => s.type === "tool_call").map((s, i) => {
-                            const call = s as Extract<Step, { type: "tool_call" }>;
-                            const result = m.steps!.find((r) => r.type === "tool_result" && r.name === call.name) as Extract<Step, { type: "tool_result" }> | undefined;
-                            return (
-                              <li key={i} className="mono text-muted-foreground leading-relaxed">
-                                <div>{call.label}</div>
-                                {result && (
-                                  <div className={`pl-4 ${result.ok ? "text-foreground/70" : "text-[color:var(--sienna)]"}`}>
-                                    {result.ok ? "✓" : "✗"} {result.summary}
-                                  </div>
-                                )}
-                              </li>
-                            );
-                          })}
+                          {pairSteps(m.steps).map((pair, i) => (
+                            <li key={i} className="mono text-muted-foreground leading-relaxed">
+                              <div>{pair.call.label}</div>
+                              {pair.result && (
+                                <div className={`pl-4 ${pair.result.ok ? "text-foreground/70" : "text-[color:var(--sienna)]"}`}>
+                                  {pair.result.ok ? "✓" : "✗"} {pair.result.summary}
+                                </div>
+                              )}
+                            </li>
+                          ))}
                         </ul>
                       )}
                       {m.content && (
@@ -222,6 +218,13 @@ export function AssistantPanel({ open, onClose }: Props) {
 }
 
 function ConfirmationCard({ pending, onConfirm, onCancel, busy }: {
+  pending: PendingAction; onConfirm: (typed?: string) => void; onCancel: () => void; busy: boolean;
+}) {
+  // NB: rendered above
+  return _ConfirmationCard({ pending, onConfirm, onCancel, busy });
+}
+
+function _ConfirmationCard({ pending, onConfirm, onCancel, busy }: {
   pending: PendingAction; onConfirm: (typed?: string) => void; onCancel: () => void; busy: boolean;
 }) {
   const requireTyped = pending.kind === "delete" && pending.requireTyped;
