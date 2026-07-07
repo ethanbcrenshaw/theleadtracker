@@ -17,6 +17,7 @@ import { Route as ApiEnrichLeadRouteImport } from './routes/api/enrich-lead'
 import { Route as ApiEnrichCandidateRouteImport } from './routes/api/enrich-candidate'
 import { Route as ApiDailyBriefRouteImport } from './routes/api/daily-brief'
 import { Route as ApiCallScriptRouteImport } from './routes/api/call-script'
+import { Route as ApiAssistantExecuteRouteImport } from './routes/api/assistant-execute'
 import { Route as ApiAssistantRouteImport } from './routes/api/assistant'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
@@ -62,6 +63,11 @@ const ApiCallScriptRoute = ApiCallScriptRouteImport.update({
   path: '/api/call-script',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAssistantExecuteRoute = ApiAssistantExecuteRouteImport.update({
+  id: '/api/assistant-execute',
+  path: '/api/assistant-execute',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAssistantRoute = ApiAssistantRouteImport.update({
   id: '/api/assistant',
   path: '/api/assistant',
@@ -92,6 +98,7 @@ export interface FileRoutesByFullPath {
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/api/assistant': typeof ApiAssistantRoute
+  '/api/assistant-execute': typeof ApiAssistantExecuteRoute
   '/api/call-script': typeof ApiCallScriptRoute
   '/api/daily-brief': typeof ApiDailyBriefRoute
   '/api/enrich-candidate': typeof ApiEnrichCandidateRoute
@@ -106,6 +113,7 @@ export interface FileRoutesByTo {
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/api/assistant': typeof ApiAssistantRoute
+  '/api/assistant-execute': typeof ApiAssistantExecuteRoute
   '/api/call-script': typeof ApiCallScriptRoute
   '/api/daily-brief': typeof ApiDailyBriefRoute
   '/api/enrich-candidate': typeof ApiEnrichCandidateRoute
@@ -121,6 +129,7 @@ export interface FileRoutesById {
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/api/assistant': typeof ApiAssistantRoute
+  '/api/assistant-execute': typeof ApiAssistantExecuteRoute
   '/api/call-script': typeof ApiCallScriptRoute
   '/api/daily-brief': typeof ApiDailyBriefRoute
   '/api/enrich-candidate': typeof ApiEnrichCandidateRoute
@@ -137,6 +146,7 @@ export interface FileRouteTypes {
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
     | '/api/assistant'
+    | '/api/assistant-execute'
     | '/api/call-script'
     | '/api/daily-brief'
     | '/api/enrich-candidate'
@@ -151,6 +161,7 @@ export interface FileRouteTypes {
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
     | '/api/assistant'
+    | '/api/assistant-execute'
     | '/api/call-script'
     | '/api/daily-brief'
     | '/api/enrich-candidate'
@@ -165,6 +176,7 @@ export interface FileRouteTypes {
     | '/.mcp/list-tools'
     | '/.well-known/oauth-protected-resource'
     | '/api/assistant'
+    | '/api/assistant-execute'
     | '/api/call-script'
     | '/api/daily-brief'
     | '/api/enrich-candidate'
@@ -180,6 +192,7 @@ export interface RootRouteChildren {
   Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   ApiAssistantRoute: typeof ApiAssistantRoute
+  ApiAssistantExecuteRoute: typeof ApiAssistantExecuteRoute
   ApiCallScriptRoute: typeof ApiCallScriptRoute
   ApiDailyBriefRoute: typeof ApiDailyBriefRoute
   ApiEnrichCandidateRoute: typeof ApiEnrichCandidateRoute
@@ -247,6 +260,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCallScriptRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/assistant-execute': {
+      id: '/api/assistant-execute'
+      path: '/api/assistant-execute'
+      fullPath: '/api/assistant-execute'
+      preLoaderRoute: typeof ApiAssistantExecuteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/assistant': {
       id: '/api/assistant'
       path: '/api/assistant'
@@ -285,6 +305,7 @@ const rootRouteChildren: RootRouteChildren = {
   Char91DotwellKnownChar93OauthProtectedResourceRoute:
     Char91DotwellKnownChar93OauthProtectedResourceRoute,
   ApiAssistantRoute: ApiAssistantRoute,
+  ApiAssistantExecuteRoute: ApiAssistantExecuteRoute,
   ApiCallScriptRoute: ApiCallScriptRoute,
   ApiDailyBriefRoute: ApiDailyBriefRoute,
   ApiEnrichCandidateRoute: ApiEnrichCandidateRoute,
