@@ -14,6 +14,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiSummarizeCallRouteImport } from './routes/api/summarize-call'
 import { Route as ApiGenerateLeadsRouteImport } from './routes/api/generate-leads'
 import { Route as ApiEnrichLeadRouteImport } from './routes/api/enrich-lead'
+import { Route as ApiEnrichCandidateRouteImport } from './routes/api/enrich-candidate'
 import { Route as ApiDailyBriefRouteImport } from './routes/api/daily-brief'
 import { Route as ApiCallScriptRouteImport } from './routes/api/call-script'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
@@ -43,6 +44,11 @@ const ApiGenerateLeadsRoute = ApiGenerateLeadsRouteImport.update({
 const ApiEnrichLeadRoute = ApiEnrichLeadRouteImport.update({
   id: '/api/enrich-lead',
   path: '/api/enrich-lead',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiEnrichCandidateRoute = ApiEnrichCandidateRouteImport.update({
+  id: '/api/enrich-candidate',
+  path: '/api/enrich-candidate',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiDailyBriefRoute = ApiDailyBriefRouteImport.update({
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/api/call-script': typeof ApiCallScriptRoute
   '/api/daily-brief': typeof ApiDailyBriefRoute
+  '/api/enrich-candidate': typeof ApiEnrichCandidateRoute
   '/api/enrich-lead': typeof ApiEnrichLeadRoute
   '/api/generate-leads': typeof ApiGenerateLeadsRoute
   '/api/summarize-call': typeof ApiSummarizeCallRoute
@@ -93,6 +100,7 @@ export interface FileRoutesByTo {
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/api/call-script': typeof ApiCallScriptRoute
   '/api/daily-brief': typeof ApiDailyBriefRoute
+  '/api/enrich-candidate': typeof ApiEnrichCandidateRoute
   '/api/enrich-lead': typeof ApiEnrichLeadRoute
   '/api/generate-leads': typeof ApiGenerateLeadsRoute
   '/api/summarize-call': typeof ApiSummarizeCallRoute
@@ -106,6 +114,7 @@ export interface FileRoutesById {
   '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/api/call-script': typeof ApiCallScriptRoute
   '/api/daily-brief': typeof ApiDailyBriefRoute
+  '/api/enrich-candidate': typeof ApiEnrichCandidateRoute
   '/api/enrich-lead': typeof ApiEnrichLeadRoute
   '/api/generate-leads': typeof ApiGenerateLeadsRoute
   '/api/summarize-call': typeof ApiSummarizeCallRoute
@@ -120,6 +129,7 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource'
     | '/api/call-script'
     | '/api/daily-brief'
+    | '/api/enrich-candidate'
     | '/api/enrich-lead'
     | '/api/generate-leads'
     | '/api/summarize-call'
@@ -132,6 +142,7 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource'
     | '/api/call-script'
     | '/api/daily-brief'
+    | '/api/enrich-candidate'
     | '/api/enrich-lead'
     | '/api/generate-leads'
     | '/api/summarize-call'
@@ -144,6 +155,7 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource'
     | '/api/call-script'
     | '/api/daily-brief'
+    | '/api/enrich-candidate'
     | '/api/enrich-lead'
     | '/api/generate-leads'
     | '/api/summarize-call'
@@ -157,6 +169,7 @@ export interface RootRouteChildren {
   Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   ApiCallScriptRoute: typeof ApiCallScriptRoute
   ApiDailyBriefRoute: typeof ApiDailyBriefRoute
+  ApiEnrichCandidateRoute: typeof ApiEnrichCandidateRoute
   ApiEnrichLeadRoute: typeof ApiEnrichLeadRoute
   ApiGenerateLeadsRoute: typeof ApiGenerateLeadsRoute
   ApiSummarizeCallRoute: typeof ApiSummarizeCallRoute
@@ -198,6 +211,13 @@ declare module '@tanstack/react-router' {
       path: '/api/enrich-lead'
       fullPath: '/api/enrich-lead'
       preLoaderRoute: typeof ApiEnrichLeadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/enrich-candidate': {
+      id: '/api/enrich-candidate'
+      path: '/api/enrich-candidate'
+      fullPath: '/api/enrich-candidate'
+      preLoaderRoute: typeof ApiEnrichCandidateRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/daily-brief': {
@@ -246,6 +266,7 @@ const rootRouteChildren: RootRouteChildren = {
     Char91DotwellKnownChar93OauthProtectedResourceRoute,
   ApiCallScriptRoute: ApiCallScriptRoute,
   ApiDailyBriefRoute: ApiDailyBriefRoute,
+  ApiEnrichCandidateRoute: ApiEnrichCandidateRoute,
   ApiEnrichLeadRoute: ApiEnrichLeadRoute,
   ApiGenerateLeadsRoute: ApiGenerateLeadsRoute,
   ApiSummarizeCallRoute: ApiSummarizeCallRoute,

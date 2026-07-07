@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { CallRecord, CallScript, Lead, LeadEnrichment, LeadStatus } from "./types";
+import type { CallRecord, CallScript, Lead, LeadEnrichment, LeadStatus, VerificationTier } from "./types";
 import { seedLeads } from "@/data/seed";
 import { qualityFromOpportunity } from "./crm-utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -58,6 +58,8 @@ type LeadRow = {
   unverifiedReason: string | null;
   enrichment: LeadEnrichment | null;
   callScript: CallScript | null;
+  verificationTier: VerificationTier | null;
+  verificationReasons: string[] | null;
   created_at?: string;
 };
 
@@ -94,6 +96,8 @@ function rowToLead(r: LeadRow): Lead {
   if (r.unverifiedReason != null) l.unverifiedReason = r.unverifiedReason;
   if (r.enrichment != null) l.enrichment = r.enrichment;
   if (r.callScript != null) l.callScript = r.callScript;
+  if (r.verificationTier != null) l.verificationTier = r.verificationTier;
+  if (r.verificationReasons != null) l.verificationReasons = r.verificationReasons;
   return sanitizeLead(l);
 }
 
@@ -129,6 +133,8 @@ function leadToRow(l: Lead): LeadRow {
     unverifiedReason: l.unverifiedReason ?? null,
     enrichment: l.enrichment ?? null,
     callScript: l.callScript ?? null,
+    verificationTier: l.verificationTier ?? null,
+    verificationReasons: l.verificationReasons ?? null,
   };
 }
 
