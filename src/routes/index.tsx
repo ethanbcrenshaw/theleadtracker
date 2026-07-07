@@ -514,11 +514,3 @@ function Dashboard() {
   );
 }
 
-function SectionHeader({ label, count }: { label: string; count: number }) {
-  return (
-    <div className="border-b-2 border-foreground/60 pb-2 flex items-baseline justify-between">
-      <div className="mono text-foreground">{label.toUpperCase()}</div>
-      <div className="mono text-muted-foreground">— {String(count).padStart(3, "0")}</div>
-    </div>
-  );
-}
