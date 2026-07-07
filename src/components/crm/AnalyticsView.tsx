@@ -1,5 +1,6 @@
 import type { Lead } from "@/lib/types";
 import { isValidContactDate } from "@/lib/crm-utils";
+import { SectionHead } from "./SectionHead";
 
 interface Props { leads: Lead[] }
 
@@ -30,10 +31,7 @@ export function AnalyticsView({ leads }: Props) {
 
   return (
     <div className="space-y-8">
-      <div className="border-b border-border pb-4">
-        <div className="mono text-muted-foreground">— Analytics · Pipeline Digest</div>
-        <h2 className="font-display text-5xl sm:text-6xl mt-2 lowercase">analytics</h2>
-      </div>
+      <SectionHead number="01" label="Analytics" italicTitle="the digest" corner count={total} />
       <div className="grid grid-cols-2 sm:grid-cols-4 border-t border-b border-border divide-x divide-y sm:divide-y-0 divide-border">
         {cells.map((c, i) => (
           <div key={c.label} className={`px-5 py-6 ${i >= 4 ? "sm:border-t sm:border-border" : ""}`}>
