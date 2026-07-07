@@ -52,6 +52,9 @@
   --color-paper: var(--background);
   --color-sienna: var(--sienna);
   --color-olive: var(--olive);
+  --color-frog: var(--frog);
+  --color-frog-ink: var(--frog-ink);
+  --color-frog-tint: var(--frog-tint);
 
   --shadow-soft: 0 0 #0000;
   --shadow-elev: 0 0 #0000;
@@ -95,6 +98,11 @@
   --sienna: oklch(0.55 0.20 30);                /* warm vermillion emphasis */
   --olive:  oklch(0.520 0.055 110);
 
+  /* Second accent — pale "frog" green. Semantic: positive / healthy / confirmed. */
+  --frog: oklch(0.83 0.11 113);
+  --frog-ink: oklch(0.42 0.09 118);             /* deep olive-green, AA on cream */
+  --frog-tint: color-mix(in oklab, oklch(0.83 0.11 113) 16%, var(--background));
+
   /* Legacy semantic tokens remapped into the print system so old
      className references keep working with the new look. */
   --navy: oklch(0.220 0.008 70);                    /* ink */
@@ -112,7 +120,7 @@
 
   --chart-1: oklch(0.220 0.008 70);
   --chart-2: oklch(0.55 0.20 30);
-  --chart-3: oklch(0.520 0.055 110);
+  --chart-3: var(--frog-ink);
   --chart-4: oklch(0.620 0.020 70);
   --chart-5: oklch(0.400 0.008 70);
 }
@@ -149,6 +157,10 @@
 
   --sienna: oklch(0.68 0.20 30);
   --olive:  oklch(0.630 0.055 110);
+
+  --frog: oklch(0.80 0.11 113);
+  --frog-ink: oklch(0.82 0.10 113);
+  --frog-tint: color-mix(in oklab, oklch(0.80 0.11 113) 10%, var(--background));
 
   --navy: oklch(0.935 0.014 85);
   --navy-foreground: oklch(0.170 0.008 70);
