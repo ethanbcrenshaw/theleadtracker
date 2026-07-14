@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import "@tanstack/react-start";
-
-const AI = "https://ai.gateway.lovable.dev/v1/chat/completions";
+import { aiText, getAI } from "@/lib/ai.server";
 
 type BriefingInput = {
   mode: "briefing";
@@ -23,11 +22,11 @@ type BriefingInput = {
 type PatternInput = {
   mode: "pattern";
   groups: Array<{
-    key: string;         // e.g. "roofers" or "Nashville"
+    key: string; // e.g. "roofers" or "Nashville"
     kind: "segment" | "city";
     contacted: number;
-    booked: number;      // interested/booked/zoom/sold
-    dead: number;        // not-interested
+    booked: number; // interested/booked/zoom/sold
+    dead: number; // not-interested
   }>;
 };
 
@@ -39,8 +38,15 @@ export const Route = createFileRoute("/api/daily-brief")({
       POST: async ({ request }) => {
         try {
           const body = (await request.json()) as Body;
-          const key = process.env.LOVABLE_API_KEY;
-          if (!key) return Response.json({ error: "AI gateway not configured" }, { status: 500 });
+          const ai = getAI();
+          if (!ai)
+            return Response.json(
+              {
+                error:
+                  "AI not configured — set ANTHROPIC_API_KEY, GEMINI_API_KEY, or LOVABLE_API_KEY",
+              },
+              { status: 500 },
+            );
 
           const system =
             body.mode === "briefing"
@@ -52,28 +58,7 @@ export const Route = createFileRoute("/api/daily-brief")({
               ? briefingUserPrompt(body.stats)
               : patternUserPrompt(body.groups);
 
-          const res = await fetch(AI, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-              model: "google/gemini-3-flash-preview",
-              messages: [
-                { role: "system", content: system },
-                { role: "user", content: user },
-              ],
-            }),
-          });
-
-          if (!res.ok) {
-            const txt = await res.text();
-            return Response.json(
-              { error: `AI gateway ${res.status}: ${txt.slice(0, 200)}` },
-              { status: res.status === 429 || res.status === 402 ? res.status : 500 },
-            );
-          }
-          const data = await res.json();
-          const text: string =
-            data?.choices?.[0]?.message?.content?.trim() ?? "";
+          const text = await aiText(ai, { system, user, maxTokens: 1024 });
           if (!text) return Response.json({ error: "Empty AI response" }, { status: 500 });
           return Response.json({ ok: true, text });
         } catch (e) {

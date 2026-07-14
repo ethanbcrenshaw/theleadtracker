@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import "@tanstack/react-start";
 import { enrichLeadFull, hostOf } from "@/lib/enrichment.server";
+import { runVerificationChecks, type PlacesSignals } from "@/lib/verification.server";
+import { getAI } from "@/lib/ai.server";
 
 /**
  * Enrich + verify a single candidate lead (not yet in DB). Called from
@@ -12,14 +14,24 @@ export const Route = createFileRoute("/api/enrich-candidate")({
     handlers: {
       POST: async ({ request }) => {
         const firecrawlKey = process.env.FIRECRAWL_API_KEY;
-        const aiKey = process.env.LOVABLE_API_KEY;
-        if (!firecrawlKey) return Response.json({ error: "FIRECRAWL_API_KEY not configured" }, { status: 500 });
+        const ai = getAI();
+        if (!firecrawlKey)
+          return Response.json({ error: "FIRECRAWL_API_KEY not configured" }, { status: 500 });
 
         let body: {
-          business?: string; city?: string; state?: string; phone?: string;
-          website?: string | null; websiteOpportunity?: string;
+          business?: string;
+          city?: string;
+          state?: string;
+          phone?: string;
+          website?: string | null;
+          websiteOpportunity?: string;
+          placesSignals?: PlacesSignals;
         };
-        try { body = await request.json(); } catch { body = {}; }
+        try {
+          body = await request.json();
+        } catch {
+          body = {};
+        }
         if (!body.business) return Response.json({ error: "business required" }, { status: 400 });
 
         try {
@@ -32,11 +44,22 @@ export const Route = createFileRoute("/api/enrich-candidate")({
               website: body.website ? hostOf(body.website) : null,
               websiteOpportunity: body.websiteOpportunity,
             },
-            { firecrawlKey, aiKey },
+            { firecrawlKey, ai },
           );
-          return Response.json({ ok: true, result });
+          // Phase 2 verification pass: website liveness/freshness + business
+          // signals + composite lead score. 5s timeouts, never throws.
+          const { verification, leadScore } = await runVerificationChecks({
+            website: body.website,
+            phone: body.phone,
+            tier: result.verificationTier,
+            signals: body.placesSignals,
+          });
+          return Response.json({ ok: true, result: { ...result, verification, leadScore } });
         } catch (e) {
-          return Response.json({ error: e instanceof Error ? e.message : "Unknown error" }, { status: 500 });
+          return Response.json(
+            { error: e instanceof Error ? e.message : "Unknown error" },
+            { status: 500 },
+          );
         }
       },
     },

@@ -1,5 +1,13 @@
 import { create } from "zustand";
-import type { CallRecord, CallScript, Lead, LeadEnrichment, LeadStatus, VerificationTier } from "./types";
+import type {
+  CallRecord,
+  CallScript,
+  Lead,
+  LeadEnrichment,
+  LeadStatus,
+  LeadVerification,
+  VerificationTier,
+} from "./types";
 import { seedLeads } from "@/data/seed";
 import { qualityFromOpportunity } from "./crm-utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -60,6 +68,8 @@ type LeadRow = {
   callScript: CallScript | null;
   verificationTier: VerificationTier | null;
   verificationReasons: string[] | null;
+  leadScore: number | null;
+  verification: LeadVerification | null;
   created_at?: string;
 };
 
@@ -98,6 +108,8 @@ function rowToLead(r: LeadRow): Lead {
   if (r.callScript != null) l.callScript = r.callScript;
   if (r.verificationTier != null) l.verificationTier = r.verificationTier;
   if (r.verificationReasons != null) l.verificationReasons = r.verificationReasons;
+  if (r.leadScore != null) l.leadScore = r.leadScore;
+  if (r.verification != null) l.verification = r.verification;
   return sanitizeLead(l);
 }
 
@@ -135,6 +147,8 @@ function leadToRow(l: Lead): LeadRow {
     callScript: l.callScript ?? null,
     verificationTier: l.verificationTier ?? null,
     verificationReasons: l.verificationReasons ?? null,
+    leadScore: l.leadScore ?? null,
+    verification: l.verification ?? null,
   };
 }
 
@@ -230,7 +244,11 @@ export const useLeads = create<LeadStore>()((set) => ({
           set({ leads: initial, hydrated: true });
           await dbUpsertMany(initial);
           if (local && typeof window !== "undefined") {
-            try { window.localStorage.removeItem(LOCAL_KEY); } catch { /* ignore */ }
+            try {
+              window.localStorage.removeItem(LOCAL_KEY);
+            } catch {
+              /* ignore */
+            }
           }
           return;
         }
@@ -293,10 +311,7 @@ export const useLeads = create<LeadStore>()((set) => ({
     set((s) => ({
       leads: s.leads.map((l) => {
         if (l.id !== id) return l;
-        nextHistory = [
-          ...l.history,
-          { id: crypto.randomUUID(), date: now, status, note },
-        ];
+        nextHistory = [...l.history, { id: crypto.randomUUID(), date: now, status, note }];
         return { ...l, status, lastContacted: now, history: nextHistory };
       }),
     }));
@@ -314,10 +329,7 @@ export const useLeads = create<LeadStore>()((set) => ({
           ...l,
           status,
           lastContacted: now,
-          history: [
-            ...l.history,
-            { id: crypto.randomUUID(), date: now, status },
-          ],
+          history: [...l.history, { id: crypto.randomUUID(), date: now, status }],
         };
         updated.push(next);
         return next;

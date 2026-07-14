@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useLeads } from "@/lib/store";
-import type { Lead, LeadEnrichment, VerificationTier } from "@/lib/types";
+import type { Lead, LeadEnrichment, LeadVerification, VerificationTier } from "@/lib/types";
 
 const CONCURRENCY = 3;
 
@@ -37,7 +37,14 @@ export function ReverifyButton() {
     setDone(0);
     setTotal(list.length);
 
-    const s: Summary = { checked: 0, newlyFlagged: 0, closed: 0, deadSites: 0, wrongBusiness: 0, errors: 0 };
+    const s: Summary = {
+      checked: 0,
+      newlyFlagged: 0,
+      closed: 0,
+      deadSites: 0,
+      wrongBusiness: 0,
+      errors: 0,
+    };
 
     let i = 0;
     const workers = Array.from({ length: Math.min(CONCURRENCY, list.length) }, async () => {
@@ -62,6 +69,8 @@ export function ReverifyButton() {
             unverifiedReason?: string | null;
             verificationTier?: VerificationTier;
             verificationReasons?: string[];
+            verification?: LeadVerification;
+            leadScore?: number;
           };
           updateLead(lead.id, {
             enrichment: u.enrichment,
@@ -71,6 +80,8 @@ export function ReverifyButton() {
             unverifiedReason: u.unverifiedReason ?? undefined,
             verificationTier: u.verificationTier,
             verificationReasons: u.verificationReasons,
+            verification: u.verification,
+            leadScore: u.leadScore,
           });
           s.checked++;
           const nextTier = u.verificationTier ?? "partial";
@@ -101,7 +112,13 @@ export function ReverifyButton() {
         disabled={running || leads.length === 0}
         className="mono border border-foreground px-3 py-1 hover:bg-foreground hover:text-background disabled:opacity-50 inline-flex items-center gap-2"
       >
-        {running ? <><Loader2 className="h-3 w-3 animate-spin" /> RE-VERIFYING…</> : "[ RE-VERIFY BOOK ]"}
+        {running ? (
+          <>
+            <Loader2 className="h-3 w-3 animate-spin" /> RE-VERIFYING…
+          </>
+        ) : (
+          "[ RE-VERIFY BOOK ]"
+        )}
       </button>
       {running && (
         <span className="mono text-muted-foreground">
@@ -120,7 +137,9 @@ export function ReverifyButton() {
                 summary.closed ? `${summary.closed} closed` : null,
                 summary.deadSites ? `${summary.deadSites} dead sites` : null,
                 summary.wrongBusiness ? `${summary.wrongBusiness} wrong-business` : null,
-              ].filter(Boolean).join(", ")})`
+              ]
+                .filter(Boolean)
+                .join(", ")})`
             : ""}
           {summary.errors ? ` · ${summary.errors} errors` : ""}
         </span>

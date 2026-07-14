@@ -2,7 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import "@tanstack/react-start";
 import { enrichLeadFull } from "@/lib/enrichment.server";
 import { hostOf } from "@/lib/enrichment.server";
+import { runVerificationChecks } from "@/lib/verification.server";
+import { getAI } from "@/lib/ai.server";
 import { createClient } from "@supabase/supabase-js";
+import type { LeadVerification } from "@/lib/types";
 
 type LeadRow = {
   id: string;
@@ -12,6 +15,7 @@ type LeadRow = {
   phone: string;
   websiteOpportunity: string;
   onlinePresence: string;
+  verification: LeadVerification | null;
 };
 
 /**
@@ -24,14 +28,20 @@ export const Route = createFileRoute("/api/enrich-lead")({
     handlers: {
       POST: async ({ request }) => {
         const firecrawlKey = process.env.FIRECRAWL_API_KEY;
-        const aiKey = process.env.LOVABLE_API_KEY;
+        const ai = getAI();
         const supabaseUrl = process.env.SUPABASE_URL;
         const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY;
-        if (!firecrawlKey) return Response.json({ error: "FIRECRAWL_API_KEY not configured" }, { status: 500 });
-        if (!supabaseUrl || !supabaseKey) return Response.json({ error: "Supabase not configured" }, { status: 500 });
+        if (!firecrawlKey)
+          return Response.json({ error: "FIRECRAWL_API_KEY not configured" }, { status: 500 });
+        if (!supabaseUrl || !supabaseKey)
+          return Response.json({ error: "Supabase not configured" }, { status: 500 });
 
         let body: { leadId?: string };
-        try { body = await request.json(); } catch { body = {}; }
+        try {
+          body = await request.json();
+        } catch {
+          body = {};
+        }
         const leadId = body.leadId?.trim();
         if (!leadId) return Response.json({ error: "leadId required" }, { status: 400 });
 
@@ -41,7 +51,7 @@ export const Route = createFileRoute("/api/enrich-lead")({
 
         const { data: row, error: readErr } = await supabase
           .from("leads")
-          .select('id,business,city,state,phone,"websiteOpportunity","onlinePresence"')
+          .select('id,business,city,state,phone,"websiteOpportunity","onlinePresence",verification')
           .eq("id", leadId)
           .maybeSingle();
         if (readErr) return Response.json({ error: readErr.message }, { status: 500 });
@@ -56,11 +66,32 @@ export const Route = createFileRoute("/api/enrich-lead")({
         try {
           const result = await enrichLeadFull(
             {
-              business: lead.business, city: lead.city, state: lead.state,
-              phone: lead.phone, website, websiteOpportunity: lead.websiteOpportunity,
+              business: lead.business,
+              city: lead.city,
+              state: lead.state,
+              phone: lead.phone,
+              website,
+              websiteOpportunity: lead.websiteOpportunity,
             },
-            { firecrawlKey, aiKey },
+            { firecrawlKey, ai },
           );
+
+          // Phase 2 verification pass. Re-verify has no fresh Places response,
+          // so business-alive signals carry over from the last stored check.
+          const priorBusiness = lead.verification?.business;
+          const { verification, leadScore } = await runVerificationChecks({
+            website,
+            phone: lead.phone,
+            tier: result.verificationTier,
+            signals: priorBusiness
+              ? {
+                  businessStatus: priorBusiness.businessStatus,
+                  rating: priorBusiness.rating,
+                  reviewCount: priorBusiness.reviewCount,
+                  lastReviewAt: priorBusiness.lastReviewAt,
+                }
+              : undefined,
+          });
 
           const patch = {
             enrichment: result.enrichment,
@@ -70,6 +101,8 @@ export const Route = createFileRoute("/api/enrich-lead")({
             unverifiedReason: result.unverifiedReason ?? null,
             verificationTier: result.verificationTier,
             verificationReasons: result.verificationReasons,
+            verification,
+            leadScore,
           };
 
           const { error: updErr } = await supabase.from("leads").update(patch).eq("id", leadId);
@@ -77,7 +110,10 @@ export const Route = createFileRoute("/api/enrich-lead")({
 
           return Response.json({ ok: true, updates: patch });
         } catch (e) {
-          return Response.json({ error: e instanceof Error ? e.message : "Unknown error" }, { status: 500 });
+          return Response.json(
+            { error: e instanceof Error ? e.message : "Unknown error" },
+            { status: 500 },
+          );
         }
       },
     },

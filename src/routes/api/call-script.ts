@@ -1,8 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import "@tanstack/react-start";
 import type { CallScript, Lead, LeadEnrichment } from "@/lib/types";
-
-const AI = "https://ai.gateway.lovable.dev/v1/chat/completions";
+import { aiExtract, getAI } from "@/lib/ai.server";
 
 const SCHEMA = {
   type: "object",
@@ -44,14 +43,9 @@ const SCHEMA = {
   additionalProperties: false,
 };
 
-type LeadInput = Pick<
-  Lead,
-  | "business"
-  | "city"
-  | "state"
-  | "websiteOpportunity"
-  | "phone"
-> & { enrichment?: LeadEnrichment };
+type LeadInput = Pick<Lead, "business" | "city" | "state" | "websiteOpportunity" | "phone"> & {
+  enrichment?: LeadEnrichment;
+};
 
 export const Route = createFileRoute("/api/call-script")({
   server: {
@@ -62,8 +56,15 @@ export const Route = createFileRoute("/api/call-script")({
           if (!lead || !lead.business) {
             return Response.json({ error: "Missing lead" }, { status: 400 });
           }
-          const key = process.env.LOVABLE_API_KEY;
-          if (!key) return Response.json({ error: "AI gateway not configured" }, { status: 500 });
+          const ai = getAI();
+          if (!ai)
+            return Response.json(
+              {
+                error:
+                  "AI not configured — set ANTHROPIC_API_KEY, GEMINI_API_KEY, or LOVABLE_API_KEY",
+              },
+              { status: 500 },
+            );
 
           const enr = lead.enrichment;
           const ctx = [
@@ -79,52 +80,26 @@ export const Route = createFileRoute("/api/call-script")({
             enr?.hours ? `Hours: ${enr.hours}` : "",
             enr?.ownerName ? `Owner: ${enr.ownerName}` : "",
             enr?.recentActivity ? `Recent activity: ${enr.recentActivity}` : "",
-            enr?.profiles?.length
-              ? `Profiles: ${enr.profiles.map((p) => p.type).join(", ")}`
-              : "",
+            enr?.profiles?.length ? `Profiles: ${enr.profiles.map((p) => p.type).join(", ")}` : "",
             enr?.pitchAngle ? `Prior pitch angle: ${enr.pitchAngle}` : "",
           ]
             .filter(Boolean)
             .join("\n");
 
-          const res = await fetch(AI, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-              model: "google/gemini-3-flash-preview",
-              messages: [
-                {
-                  role: "system",
-                  content:
-                    "You are a sales coach for a solo web designer cold-calling local businesses. Produce a TIGHT pre-call script tailored to the specific business. Ground every line in the enrichment data provided — reference real ratings, review counts, hours, or activity when they exist. If enrichment is thin, keep it conservative and generic instead of making up facts. Objection responses must be practical and short (1-2 sentences). Never invent numbers.",
-                },
-                { role: "user", content: ctx },
-              ],
-              tools: [
-                {
-                  type: "function",
-                  function: {
-                    name: "build_call_script",
-                    description: "Build a tailored pre-call script.",
-                    parameters: SCHEMA,
-                  },
-                },
-              ],
-              tool_choice: { type: "function", function: { name: "build_call_script" } },
-            }),
+          const parsed = await aiExtract<{
+            opener: string;
+            pitchAngle: string;
+            discovery?: string[];
+            objections?: Array<{ objection: string; response: string }>;
+          }>(ai, {
+            system:
+              "You are a sales coach for a solo web designer cold-calling local businesses. Produce a TIGHT pre-call script tailored to the specific business. Ground every line in the enrichment data provided — reference real ratings, review counts, hours, or activity when they exist. If enrichment is thin, keep it conservative and generic instead of making up facts. Objection responses must be practical and short (1-2 sentences). Never invent numbers.",
+            user: ctx,
+            toolName: "build_call_script",
+            toolDescription: "Build a tailored pre-call script.",
+            schema: SCHEMA,
           });
-
-          if (!res.ok) {
-            const txt = await res.text();
-            return Response.json(
-              { error: `AI gateway ${res.status}: ${txt.slice(0, 200)}` },
-              { status: res.status === 429 || res.status === 402 ? res.status : 500 },
-            );
-          }
-          const data = await res.json();
-          const args = data?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
-          if (!args) return Response.json({ error: "No structured output" }, { status: 500 });
-          const parsed = JSON.parse(args);
+          if (!parsed) return Response.json({ error: "No structured output" }, { status: 500 });
           const script: CallScript = {
             opener: parsed.opener,
             pitchAngle: parsed.pitchAngle,

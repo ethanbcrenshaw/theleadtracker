@@ -1,7 +1,26 @@
-import { X, ArrowLeft, PhoneCall, Voicemail, Video, CalendarClock, CheckCircle2, XCircle, ExternalLink, Loader2, Sparkles } from "lucide-react";
+import {
+  X,
+  ArrowLeft,
+  PhoneCall,
+  Voicemail,
+  Video,
+  CalendarClock,
+  CheckCircle2,
+  XCircle,
+  ExternalLink,
+  Loader2,
+  Sparkles,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import type { Lead, LeadEnrichment, LeadProfileType, LeadStatus, WebsiteOpportunity } from "@/lib/types";
+import type {
+  Lead,
+  LeadEnrichment,
+  LeadProfileType,
+  LeadStatus,
+  LeadVerification,
+  WebsiteOpportunity,
+} from "@/lib/types";
 import { useLeads } from "@/lib/store";
 import { StatusBadge, TagBadge, TierChip, EvidenceChip } from "./Badges";
 import { formatDate, normalizeTag, pitchAngle, sourceLinks } from "@/lib/crm-utils";
@@ -25,12 +44,18 @@ function initials(name: string) {
 
 function opportunityShort(op: WebsiteOpportunity): string {
   switch (op) {
-    case "No Dedicated Website": return "No website";
-    case "Facebook Only": return "Facebook only";
-    case "Yelp/Directory Only": return "Directory only";
-    case "Outdated Website": return "Outdated site";
-    case "Has Website": return "Has website";
-    case "Social-Heavy": return "Social-heavy";
+    case "No Dedicated Website":
+      return "No website";
+    case "Facebook Only":
+      return "Facebook only";
+    case "Yelp/Directory Only":
+      return "Directory only";
+    case "Outdated Website":
+      return "Outdated site";
+    case "Has Website":
+      return "Has website";
+    case "Social-Heavy":
+      return "Social-heavy";
   }
 }
 
@@ -95,19 +120,30 @@ export function LeadDetail({ lead, onClose, onStartCall, inline, backLabel }: Pr
       {lead && (
         <>
           <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             className="fixed inset-0 bg-background/60 backdrop-blur-sm z-40"
             onClick={onClose}
           />
           <motion.aside
-            initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
             transition={{ type: "spring", damping: 28, stiffness: 260 }}
             className="fixed right-0 top-0 bottom-0 w-full sm:w-[580px] bg-background border-l border-foreground z-50 overflow-y-auto"
           >
             <div className="sticky top-0 bg-background/95 backdrop-blur border-b border-border px-6 py-4 flex items-center justify-between z-10">
-              <span className="mono text-muted-foreground">RANK {String(lead.priority).padStart(3, "0")}</span>
+              <span className="mono text-muted-foreground">
+                RANK {String(lead.priority).padStart(3, "0")}
+              </span>
               <div className="flex items-center gap-3">
-                <button onClick={onClose} className="mono text-muted-foreground hover:text-foreground">[ ESC ]</button>
+                <button
+                  onClick={onClose}
+                  className="mono text-muted-foreground hover:text-foreground"
+                >
+                  [ ESC ]
+                </button>
                 <button onClick={onClose} aria-label="Close" className="p-1 hover:bg-foreground/10">
                   <X className="h-4 w-4" />
                 </button>
@@ -155,184 +191,201 @@ function DetailBody({
   const [editOpen, setEditOpen] = useState(false);
   return (
     <div className="p-6 space-y-8">
-              <LeadHero
-                lead={lead}
-                onStartCall={onStartCall}
-                onEdit={() => setEditOpen(true)}
-              />
-              <Dossier lead={lead} updateLead={updateLead} />
-              <OutcomeActions
-                lead={lead}
-                setStatus={setStatus}
-                updateLead={updateLead}
-              />
-              <NotesBlock
-                lead={lead}
-                note={note}
-                setNote={setNote}
-                addNote={addNote}
-              />
-              <TagsBlock lead={lead} updateLead={updateLead} />
+      <LeadHero lead={lead} onStartCall={onStartCall} onEdit={() => setEditOpen(true)} />
+      <Dossier lead={lead} updateLead={updateLead} />
+      <OutcomeActions lead={lead} setStatus={setStatus} updateLead={updateLead} />
+      <NotesBlock lead={lead} note={note} setNote={setNote} addNote={addNote} />
+      <TagsBlock lead={lead} updateLead={updateLead} />
 
-              {(lead.aiSummary || lead.aiNextAction) && (
-                <div className="border-t border-border pt-4">
-                  <div className="mono text-muted-foreground mb-2">— AI Notes · latest call</div>
-                  {lead.aiSummary && <p className="text-sm text-foreground/90 leading-relaxed">{lead.aiSummary}</p>}
-                  {lead.aiNextAction && (
-                    <div className="mt-2 text-xs text-foreground/80">
-                      <span className="mono text-[color:var(--sienna)]">NEXT —</span> {lead.aiNextAction}
-                    </div>
-                  )}
-                </div>
-              )}
+      {(lead.aiSummary || lead.aiNextAction) && (
+        <div className="border-t border-border pt-4">
+          <div className="mono text-muted-foreground mb-2">— AI Notes · latest call</div>
+          {lead.aiSummary && (
+            <p className="text-sm text-foreground/90 leading-relaxed">{lead.aiSummary}</p>
+          )}
+          {lead.aiNextAction && (
+            <div className="mt-2 text-xs text-foreground/80">
+              <span className="mono text-[color:var(--sienna)]">NEXT —</span> {lead.aiNextAction}
+            </div>
+          )}
+        </div>
+      )}
 
-              {lead.owner && (
-                <div className="border-t border-border pt-4">
-                  <div className="mono text-muted-foreground mb-2">— Owner</div>
-                  <div className="font-display text-2xl text-foreground">{lead.owner}</div>
-                  {lead.ownerSource && (
-                    <a
-                      href={lead.ownerSource.split(/[ ,&]+http/)[0].startsWith("http") ? lead.ownerSource.split(/\s|,/)[0] : "#"}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mono ink-link mt-2 inline-block"
-                    >
-                      [ SOURCE ]
-                    </a>
-                  )}
-                </div>
-              )}
+      {lead.owner && (
+        <div className="border-t border-border pt-4">
+          <div className="mono text-muted-foreground mb-2">— Owner</div>
+          <div className="font-display text-2xl text-foreground">{lead.owner}</div>
+          {lead.ownerSource && (
+            <a
+              href={
+                lead.ownerSource.split(/[ ,&]+http/)[0].startsWith("http")
+                  ? lead.ownerSource.split(/\s|,/)[0]
+                  : "#"
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mono ink-link mt-2 inline-block"
+            >
+              [ SOURCE ]
+            </a>
+          )}
+        </div>
+      )}
 
-              <div className="border-t border-border pt-4">
-                <div className="mono text-muted-foreground mb-2">— Online Presence</div>
-                <p className="text-sm text-foreground/90">{lead.onlinePresence}</p>
-                <div className="flex flex-wrap gap-1.5 mt-3">
-                  {lead.sources.map((s) => (
-                    <span key={s} className="mono border border-border px-1.5 py-1 text-muted-foreground">{s}</span>
-                  ))}
-                </div>
+      <div className="border-t border-border pt-4">
+        <div className="mono text-muted-foreground mb-2">— Online Presence</div>
+        <p className="text-sm text-foreground/90">{lead.onlinePresence}</p>
+        <div className="flex flex-wrap gap-1.5 mt-3">
+          {lead.sources.map((s) => (
+            <span key={s} className="mono border border-border px-1.5 py-1 text-muted-foreground">
+              {s}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="border-t border-border pt-4">
+        <div className="mono text-muted-foreground mb-2">— Find Them Online</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 border-t border-border">
+          {sourceLinks(lead).map((link) => (
+            <a
+              key={link.source + link.url}
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between gap-2 border-b border-r border-border px-3 py-3 hover:bg-foreground/[0.04] transition-colors"
+            >
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-foreground truncate">{link.label}</div>
+                <div className="mono text-muted-foreground truncate">{link.domain}</div>
               </div>
+              <span className="mono text-muted-foreground">[ OPEN ]</span>
+            </a>
+          ))}
+        </div>
+        <div className="mono text-muted-foreground mt-2">
+          Links search by business + city — opens the most likely profile.
+        </div>
+      </div>
 
-              <div className="border-t border-border pt-4">
-                <div className="mono text-muted-foreground mb-2">— Find Them Online</div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 border-t border-border">
-                  {sourceLinks(lead).map((link) => (
-                    <a
-                      key={link.source + link.url}
-                      href={link.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-between gap-2 border-b border-r border-border px-3 py-3 hover:bg-foreground/[0.04] transition-colors"
-                    >
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium text-foreground truncate">{link.label}</div>
-                        <div className="mono text-muted-foreground truncate">{link.domain}</div>
-                      </div>
-                      <span className="mono text-muted-foreground">[ OPEN ]</span>
-                    </a>
-                  ))}
+      <div className="border-t border-border pt-4">
+        <div className="mono text-muted-foreground mb-2">— Manual Follow-Up Override</div>
+        <div className="flex gap-2">
+          <input
+            type="date"
+            value={followUp}
+            onChange={(e) => setFollowUp(e.target.value)}
+            className="flex-1 px-3 py-2 border border-border bg-transparent text-sm"
+          />
+          <button
+            onClick={() =>
+              updateLead(lead.id, {
+                nextFollowUp: followUp ? new Date(followUp).toISOString() : undefined,
+              })
+            }
+            className="mono px-4 py-2 bg-foreground text-background hover:opacity-90"
+          >
+            [ SAVE ]
+          </button>
+        </div>
+      </div>
+
+      <div className="border-t border-border pt-4">
+        <div className="mono text-muted-foreground mb-3">— Contact History</div>
+        {lead.history.length === 0 ? (
+          <div className="mono text-muted-foreground">— no contact yet — start with a call —</div>
+        ) : (
+          <div className="space-y-2">
+            {[...lead.history].reverse().map((h) => (
+              <div key={h.id} className="border border-border p-3">
+                <div className="flex items-center justify-between">
+                  <StatusBadge s={h.status} />
+                  <span className="mono text-muted-foreground">{formatDate(h.date)}</span>
                 </div>
-                <div className="mono text-muted-foreground mt-2">
-                  Links search by business + city — opens the most likely profile.
-                </div>
+                {h.note && <p className="text-xs text-foreground/80 mt-1">{h.note}</p>}
               </div>
+            ))}
+          </div>
+        )}
+      </div>
 
-              <div className="border-t border-border pt-4">
-                <div className="mono text-muted-foreground mb-2">— Manual Follow-Up Override</div>
-                <div className="flex gap-2">
-                  <input
-                    type="date"
-                    value={followUp}
-                    onChange={(e) => setFollowUp(e.target.value)}
-                    className="flex-1 px-3 py-2 border border-border bg-transparent text-sm"
-                  />
-                  <button
-                    onClick={() => updateLead(lead.id, { nextFollowUp: followUp ? new Date(followUp).toISOString() : undefined })}
-                    className="mono px-4 py-2 bg-foreground text-background hover:opacity-90"
-                  >
-                    [ SAVE ]
-                  </button>
-                </div>
-              </div>
-
-              <div className="border-t border-border pt-4">
-                <div className="mono text-muted-foreground mb-3">— Contact History</div>
-                {lead.history.length === 0 ? (
-                  <div className="mono text-muted-foreground">— no contact yet — start with a call —</div>
-                ) : (
-                  <div className="space-y-2">
-                    {[...lead.history].reverse().map((h) => (
-                      <div key={h.id} className="border border-border p-3">
-                        <div className="flex items-center justify-between">
-                          <StatusBadge s={h.status} />
-                          <span className="mono text-muted-foreground">{formatDate(h.date)}</span>
-                        </div>
-                        {h.note && <p className="text-xs text-foreground/80 mt-1">{h.note}</p>}
-                      </div>
-                    ))}
-                  </div>
+      {lead.callRecords && lead.callRecords.length > 0 && (
+        <div className="border-t border-border pt-4">
+          <div className="mono text-muted-foreground mb-3">— Call Recordings & Summaries</div>
+          <div className="space-y-2">
+            {[...lead.callRecords].reverse().map((c) => (
+              <details key={c.id} className="border border-border p-3">
+                <summary className="cursor-pointer flex items-center justify-between">
+                  <span className="text-sm font-medium text-foreground">{c.outcome}</span>
+                  <span className="mono text-muted-foreground">{formatDate(c.createdAt)}</span>
+                </summary>
+                {c.summary && <p className="mt-2 text-sm text-foreground/90">{c.summary}</p>}
+                {c.nextAction && (
+                  <p className="mt-1 text-xs text-foreground/80">
+                    <span className="mono text-[color:var(--sienna)]">NEXT —</span> {c.nextAction}
+                  </p>
                 )}
-              </div>
-
-              {lead.callRecords && lead.callRecords.length > 0 && (
-                <div className="border-t border-border pt-4">
-                  <div className="mono text-muted-foreground mb-3">— Call Recordings & Summaries</div>
-                  <div className="space-y-2">
-                    {[...lead.callRecords].reverse().map((c) => (
-                      <details key={c.id} className="border border-border p-3">
-                        <summary className="cursor-pointer flex items-center justify-between">
-                          <span className="text-sm font-medium text-foreground">{c.outcome}</span>
-                          <span className="mono text-muted-foreground">{formatDate(c.createdAt)}</span>
-                        </summary>
-                        {c.summary && <p className="mt-2 text-sm text-foreground/90">{c.summary}</p>}
-                        {c.nextAction && (
-                          <p className="mt-1 text-xs text-foreground/80"><span className="mono text-[color:var(--sienna)]">NEXT —</span> {c.nextAction}</p>
-                        )}
-                        {c.transcript && (
-                          <pre className="mt-2 text-[11px] text-muted-foreground whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">{c.transcript}</pre>
-                        )}
-                      </details>
-                    ))}
-                  </div>
-                </div>
-              )}
+                {c.transcript && (
+                  <pre className="mt-2 text-[11px] text-muted-foreground whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">
+                    {c.transcript}
+                  </pre>
+                )}
+              </details>
+            ))}
+          </div>
+        </div>
+      )}
       <AddLeadSheet mode="edit" lead={lead} open={editOpen} onOpenChange={setEditOpen} />
     </div>
   );
 }
 
-function LeadHero({ lead, onStartCall, onEdit }: { lead: Lead; onStartCall?: (lead: Lead) => void; onEdit?: () => void }) {
+function LeadHero({
+  lead,
+  onStartCall,
+  onEdit,
+}: {
+  lead: Lead;
+  onStartCall?: (lead: Lead) => void;
+  onEdit?: () => void;
+}) {
   const rating = lead.enrichment?.reviews?.[0]?.rating;
   const wStatus = lead.enrichment?.websiteStatus;
   const wLabel =
-    wStatus === "good" ? "LIVE" :
-    wStatus === "outdated" ? "OUTDATED" :
-    wStatus === "none" ? "NONE" : "—";
+    wStatus === "good"
+      ? "LIVE"
+      : wStatus === "outdated"
+        ? "OUTDATED"
+        : wStatus === "none"
+          ? "NONE"
+          : "—";
   const wTone =
-    wStatus === "good" ? "text-[color:var(--frog-ink)]" :
-    wStatus === "outdated" || wStatus === "none" ? "text-[color:var(--sienna)]" :
-    "text-muted-foreground";
+    wStatus === "good"
+      ? "text-[color:var(--frog-ink)]"
+      : wStatus === "outdated" || wStatus === "none"
+        ? "text-[color:var(--sienna)]"
+        : "text-muted-foreground";
   return (
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
-      <div>
-        <div className="mono text-muted-foreground">— Contact</div>
-        <h2 className="font-display text-4xl sm:text-5xl text-foreground leading-none mt-2 break-words">
-          {lead.business}
-        </h2>
-        <div className="mono text-muted-foreground mt-3">
-          {lead.city.toUpperCase()}, {lead.state.toUpperCase()}
-        </div>
-        <div className="flex items-center gap-3 mt-3">
-          <StatusBadge s={lead.status} />
-          {lead.zoomBooked && (
-            <span className="mono border border-[color:var(--sienna)] text-[color:var(--sienna)] px-1.5 py-1">
-              ZOOM {lead.zoomDate ? formatDate(lead.zoomDate).toUpperCase() : "BOOKED"}
-            </span>
-          )}
-        </div>
-      </div>
+          <div>
+            <div className="mono text-muted-foreground">— Contact</div>
+            <h2 className="font-display text-4xl sm:text-5xl text-foreground leading-none mt-2 break-words">
+              {lead.business}
+            </h2>
+            <div className="mono text-muted-foreground mt-3">
+              {lead.city.toUpperCase()}, {lead.state.toUpperCase()}
+            </div>
+            <div className="flex items-center gap-3 mt-3">
+              <StatusBadge s={lead.status} />
+              {lead.zoomBooked && (
+                <span className="mono border border-[color:var(--sienna)] text-[color:var(--sienna)] px-1.5 py-1">
+                  ZOOM {lead.zoomDate ? formatDate(lead.zoomDate).toUpperCase() : "BOOKED"}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
         <div
           aria-hidden
@@ -355,19 +408,25 @@ function LeadHero({ lead, onStartCall, onEdit }: { lead: Lead; onStartCall?: (le
         )}
         <span className="figure-box">
           <span className="mono text-muted-foreground">REVIEWS</span>
-          <span className={`font-display text-2xl leading-none ${rating ? "text-foreground" : "text-muted-foreground"}`}>
+          <span
+            className={`font-display text-2xl leading-none ${rating ? "text-foreground" : "text-muted-foreground"}`}
+          >
             {rating ? `${rating}★` : "—"}
           </span>
         </span>
         <span className="figure-box">
           <span className="mono text-muted-foreground">WEBSITE</span>
-          <span className={`mono ${wTone}`} style={{ fontSize: "13px" }}>{wLabel}</span>
+          <span className={`mono ${wTone}`} style={{ fontSize: "13px" }}>
+            {wLabel}
+          </span>
         </span>
       </div>
 
       <div className="border-t border-border pt-4">
         <div className="mono text-muted-foreground mb-2">— Opportunity</div>
-        <div className="mono text-foreground">{opportunityShort(lead.websiteOpportunity).toUpperCase()}</div>
+        <div className="mono text-foreground">
+          {opportunityShort(lead.websiteOpportunity).toUpperCase()}
+        </div>
         <p className="text-sm text-foreground/85 leading-relaxed mt-2">{pitchAngle(lead)}</p>
       </div>
 
@@ -464,12 +523,34 @@ function OutcomeActions({
     setPickerFor(null);
   };
 
-  const buttons: { key: OutcomeKey; label: string; icon: typeof PhoneCall; primary?: boolean; onClick: () => void }[] = [
-    { key: "called", label: "Called", icon: PhoneCall, primary: true, onClick: () => apply("called") },
+  const buttons: {
+    key: OutcomeKey;
+    label: string;
+    icon: typeof PhoneCall;
+    primary?: boolean;
+    onClick: () => void;
+  }[] = [
+    {
+      key: "called",
+      label: "Called",
+      icon: PhoneCall,
+      primary: true,
+      onClick: () => apply("called"),
+    },
     { key: "voicemail", label: "Voicemail", icon: Voicemail, onClick: () => apply("voicemail") },
-    { key: "callback", label: "Callback", icon: CalendarClock, onClick: () => setPickerFor("callback") },
+    {
+      key: "callback",
+      label: "Callback",
+      icon: CalendarClock,
+      onClick: () => setPickerFor("callback"),
+    },
     { key: "zoom", label: "Zoom booked", icon: Video, onClick: () => setPickerFor("zoom") },
-    { key: "notInterested", label: "Not interested", icon: XCircle, onClick: () => apply("notInterested") },
+    {
+      key: "notInterested",
+      label: "Not interested",
+      icon: XCircle,
+      onClick: () => apply("notInterested"),
+    },
     { key: "sold", label: "Sold", icon: CheckCircle2, onClick: () => apply("sold") },
   ];
 
@@ -504,10 +585,16 @@ function OutcomeActions({
               onChange={(e) => setPickedDate(e.target.value)}
               className="flex-1 px-3 py-2 border border-border bg-transparent text-sm"
             />
-            <button onClick={confirmPicker} className="mono px-4 py-2 bg-foreground text-background hover:opacity-90">
+            <button
+              onClick={confirmPicker}
+              className="mono px-4 py-2 bg-foreground text-background hover:opacity-90"
+            >
               [ CONFIRM ]
             </button>
-            <button onClick={() => setPickerFor(null)} className="mono px-4 py-2 border border-border hover:border-foreground">
+            <button
+              onClick={() => setPickerFor(null)}
+              className="mono px-4 py-2 border border-border hover:border-foreground"
+            >
               [ CANCEL ]
             </button>
           </div>
@@ -548,7 +635,12 @@ function NotesBlock({
           Last contact — {lead.lastContacted ? formatDate(lead.lastContacted) : "never"}
         </div>
         <button
-          onClick={() => { if (note.trim()) { addNote(lead.id, note.trim()); setNote(""); } }}
+          onClick={() => {
+            if (note.trim()) {
+              addNote(lead.id, note.trim());
+              setNote("");
+            }
+          }}
           disabled={!note.trim()}
           className="mono px-4 py-2 bg-foreground text-background hover:opacity-90 disabled:opacity-40"
         >
@@ -606,7 +698,10 @@ function TagsBlock({
           placeholder="e.g. no website, referral"
           className="flex-1 px-3 py-2 border border-border bg-transparent text-sm focus:outline-none focus:border-foreground"
         />
-        <button onClick={addTag} className="mono px-4 py-2 border border-foreground hover:bg-foreground hover:text-background">
+        <button
+          onClick={addTag}
+          className="mono px-4 py-2 border border-foreground hover:bg-foreground hover:text-background"
+        >
           [ ADD ]
         </button>
       </div>
@@ -617,27 +712,157 @@ function TagsBlock({
 // ── Dossier ────────────────────────────────────────────────────────────────
 
 const PROFILE_LABEL: Record<LeadProfileType, string> = {
-  "website": "WEBSITE",
+  website: "WEBSITE",
   "google-business": "GOOGLE BUSINESS",
-  "facebook": "FACEBOOK",
-  "instagram": "INSTAGRAM",
-  "yelp": "YELP",
-  "linkedin": "LINKEDIN",
-  "directory": "DIRECTORY",
-  "other": "OTHER",
+  facebook: "FACEBOOK",
+  instagram: "INSTAGRAM",
+  yelp: "YELP",
+  linkedin: "LINKEDIN",
+  directory: "DIRECTORY",
+  other: "OTHER",
 };
 
 const PROFILE_ORDER: LeadProfileType[] = [
-  "website", "google-business", "facebook", "instagram", "yelp", "linkedin", "directory", "other",
+  "website",
+  "google-business",
+  "facebook",
+  "instagram",
+  "yelp",
+  "linkedin",
+  "directory",
+  "other",
 ];
 
-function websiteStatusLine(status: LeadEnrichment["websiteStatus"]): { label: string; tone: "warn" | "ok" | "muted" } {
+function websiteStatusLine(status: LeadEnrichment["websiteStatus"]): {
+  label: string;
+  tone: "warn" | "ok" | "muted";
+} {
   switch (status) {
-    case "none": return { label: "NO DEDICATED WEBSITE", tone: "warn" };
-    case "outdated": return { label: "OUTDATED WEBSITE", tone: "warn" };
-    case "good": return { label: "HAS WEBSITE", tone: "ok" };
-    default: return { label: "WEBSITE STATUS UNKNOWN", tone: "muted" };
+    case "none":
+      return { label: "NO DEDICATED WEBSITE", tone: "warn" };
+    case "outdated":
+      return { label: "OUTDATED WEBSITE", tone: "warn" };
+    case "good":
+      return { label: "HAS WEBSITE", tone: "ok" };
+    default:
+      return { label: "WEBSITE STATUS UNKNOWN", tone: "muted" };
   }
+}
+
+function relativeDays(iso: string): string {
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  if (isNaN(days)) return "";
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 7) return `${days} days ago`;
+  if (days < 30) return `${Math.round(days / 7)} week${Math.round(days / 7) === 1 ? "" : "s"} ago`;
+  if (days < 365)
+    return `${Math.round(days / 30)} month${Math.round(days / 30) === 1 ? "" : "s"} ago`;
+  return `${Math.round(days / 365)} year${Math.round(days / 365) === 1 ? "" : "s"} ago`;
+}
+
+function websiteFactLine(w: LeadVerification["website"]): { text: string; bad: boolean } {
+  switch (w.status) {
+    case "live":
+      return {
+        text: `live ✓${w.finalUrl ? ` (${w.finalUrl.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")})` : ""}`,
+        bad: false,
+      };
+    case "dead":
+      return { text: `dead link ✗${w.reason ? ` (${w.reason})` : ""}`, bad: true };
+    case "parked":
+      return { text: "parked domain ✗ (placeholder page, no real site)", bad: true };
+    case "redirect-social":
+      return { text: `redirects to social ✗${w.reason ? ` (${w.reason})` : ""}`, bad: true };
+    case "none":
+      return { text: "none listed — highest opportunity", bad: false };
+  }
+}
+
+function VerificationFacts({ v, leadScore }: { v: LeadVerification; leadScore?: number }) {
+  const site = websiteFactLine(v.website);
+  const f = v.freshness;
+  const b = v.business;
+  const freshnessBits: string[] = [];
+  if (f) {
+    if (f.copyrightYear) freshnessBits.push(`© ${f.copyrightYear}`);
+    if (f.hasViewportMeta === false) freshnessBits.push("no mobile viewport");
+    if (f.https === false) freshnessBits.push("no HTTPS");
+    freshnessBits.push(f.outdated ? "looks outdated ✗" : "looks current ✓");
+  }
+  const statusText = b.businessStatus
+    ? b.businessStatus === "OPERATIONAL"
+      ? "operational ✓"
+      : `${b.businessStatus.replace(/_/g, " ").toLowerCase()} ✗`
+    : undefined;
+
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-3 mb-2">
+        <div className="mono text-muted-foreground">— Verification</div>
+        <span className="mono text-muted-foreground text-xs">
+          CHECKED {relativeDays(v.checkedAt).toUpperCase()}
+        </span>
+      </div>
+      <div className="border border-border px-3">
+        <div className="grid grid-cols-[7.5rem_1fr] gap-3 py-2 border-b border-border">
+          <div className="mono text-muted-foreground">Website</div>
+          <div className={`text-sm ${site.bad ? "text-[color:var(--sienna)]" : "text-foreground"}`}>
+            {site.text}
+          </div>
+        </div>
+        {freshnessBits.length > 0 && (
+          <div className="grid grid-cols-[7.5rem_1fr] gap-3 py-2 border-b border-border">
+            <div className="mono text-muted-foreground">Freshness</div>
+            <div
+              className={`text-sm ${f?.outdated ? "text-[color:var(--sienna)]" : "text-foreground"}`}
+            >
+              {freshnessBits.join(" · ")}
+            </div>
+          </div>
+        )}
+        {statusText && (
+          <div className="grid grid-cols-[7.5rem_1fr] gap-3 py-2 border-b border-border">
+            <div className="mono text-muted-foreground">Status</div>
+            <div
+              className={`text-sm ${statusText.includes("✗") ? "text-[color:var(--sienna)]" : "text-foreground"}`}
+            >
+              {statusText}
+            </div>
+          </div>
+        )}
+        {(b.rating !== undefined || b.reviewCount !== undefined) && (
+          <div className="grid grid-cols-[7.5rem_1fr] gap-3 py-2 border-b border-border">
+            <div className="mono text-muted-foreground">Reviews</div>
+            <div className="text-sm text-foreground">
+              {b.rating !== undefined ? `${b.rating}★` : ""}
+              {b.rating !== undefined && b.reviewCount !== undefined ? " · " : ""}
+              {b.reviewCount !== undefined
+                ? `${b.reviewCount} review${b.reviewCount === 1 ? "" : "s"}`
+                : ""}
+            </div>
+          </div>
+        )}
+        {b.lastReviewAt && (
+          <div className="grid grid-cols-[7.5rem_1fr] gap-3 py-2 border-b border-border">
+            <div className="mono text-muted-foreground">Last review</div>
+            <div className="text-sm text-foreground">{relativeDays(b.lastReviewAt)}</div>
+          </div>
+        )}
+        {typeof leadScore === "number" && (
+          <div className="grid grid-cols-[7.5rem_1fr] gap-3 py-2">
+            <div className="mono text-muted-foreground">Lead score</div>
+            <div className="text-sm text-foreground">
+              <span className="font-display text-lg leading-none">
+                {String(leadScore).padStart(2, "0")}
+              </span>
+              <span className="text-muted-foreground"> / 100</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function DossierRow({ label, value }: { label: string; value?: string | null }) {
@@ -651,7 +876,13 @@ function DossierRow({ label, value }: { label: string; value?: string | null }) 
   );
 }
 
-function Dossier({ lead, updateLead }: { lead: Lead; updateLead: (id: string, patch: Partial<Lead>) => void }) {
+function Dossier({
+  lead,
+  updateLead,
+}: {
+  lead: Lead;
+  updateLead: (id: string, patch: Partial<Lead>) => void;
+}) {
   const [researching, setResearching] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const e = lead.enrichment;
@@ -674,6 +905,10 @@ function Dossier({ lead, updateLead }: { lead: Lead; updateLead: (id: string, pa
         confidenceEvidence?: string[];
         unverified?: boolean;
         unverifiedReason?: string | null;
+        verificationTier?: Lead["verificationTier"];
+        verificationReasons?: string[];
+        verification?: LeadVerification;
+        leadScore?: number;
       };
       updateLead(lead.id, {
         enrichment: u.enrichment,
@@ -681,6 +916,10 @@ function Dossier({ lead, updateLead }: { lead: Lead; updateLead: (id: string, pa
         confidenceEvidence: u.confidenceEvidence,
         unverified: u.unverified,
         unverifiedReason: u.unverifiedReason ?? undefined,
+        verificationTier: u.verificationTier,
+        verificationReasons: u.verificationReasons,
+        verification: u.verification,
+        leadScore: u.leadScore,
       });
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : "Research failed");
@@ -697,17 +936,23 @@ function Dossier({ lead, updateLead }: { lead: Lead; updateLead: (id: string, pa
         <div className="border border-dashed border-border p-5 text-center space-y-3">
           <div className="mono text-muted-foreground">— not yet researched —</div>
           <div className="text-xs text-muted-foreground max-w-sm mx-auto">
-            This lead has no enrichment data. Run research to fetch the online-presence map,
-            reviews snapshot, and a tailored pitch angle.
+            This lead has no enrichment data. Run research to fetch the online-presence map, reviews
+            snapshot, and a tailored pitch angle.
           </div>
           <button
             onClick={research}
             disabled={researching}
             className="mono inline-flex items-center gap-2 px-4 py-2 bg-foreground text-background hover:opacity-90 disabled:opacity-60"
           >
-            {researching
-              ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> RESEARCHING…</>
-              : <><Sparkles className="h-3.5 w-3.5" /> [ RESEARCH NOW ]</>}
+            {researching ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> RESEARCHING…
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-3.5 w-3.5" /> [ RESEARCH NOW ]
+              </>
+            )}
           </button>
           {err && <div className="mono text-[color:var(--sienna)]">{err}</div>}
         </div>
@@ -756,7 +1001,9 @@ function Dossier({ lead, updateLead }: { lead: Lead; updateLead: (id: string, pa
           {typeof conf === "number" && (
             <span className="figure-box">
               <span className="mono text-muted-foreground">CONF</span>
-              <span className="font-display text-lg leading-none text-foreground">{String(conf).padStart(2, "0")}</span>
+              <span className="font-display text-lg leading-none text-foreground">
+                {String(conf).padStart(2, "0")}
+              </span>
             </span>
           )}
           <TierChip tier={lead.verificationTier} />
@@ -767,11 +1014,14 @@ function Dossier({ lead, updateLead }: { lead: Lead; updateLead: (id: string, pa
         {(lead.verificationReasons?.length ?? 0) > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {lead.verificationReasons!.map((r, i) => (
-              <span key={i} className={`mono border px-1.5 py-0.5 ${
-                /unreachable|didn't match|closed|failed/i.test(r)
-                  ? "border-[color:var(--sienna)] text-[color:var(--sienna)]"
-                  : "border-border text-muted-foreground"
-              }`}>
+              <span
+                key={i}
+                className={`mono border px-1.5 py-0.5 ${
+                  /unreachable|didn't match|closed|failed/i.test(r)
+                    ? "border-[color:var(--sienna)] text-[color:var(--sienna)]"
+                    : "border-border text-muted-foreground"
+                }`}
+              >
                 {r}
               </span>
             ))}
@@ -784,14 +1034,21 @@ function Dossier({ lead, updateLead }: { lead: Lead; updateLead: (id: string, pa
         )}
       </div>
 
+      {/* 1b. Verification facts (Phase 2 pipeline) */}
+      {lead.verification && <VerificationFacts v={lead.verification} leadScore={lead.leadScore} />}
+
       {/* 2. Online-presence map */}
       <div>
         <div className="mono text-muted-foreground mb-2">— Online Presence</div>
-        <div className={`mono mb-3 ${
-          status.tone === "warn" ? "text-[color:var(--sienna)]"
-          : status.tone === "ok" ? "text-foreground"
-          : "text-muted-foreground"
-        }`}>
+        <div
+          className={`mono mb-3 ${
+            status.tone === "warn"
+              ? "text-[color:var(--sienna)]"
+              : status.tone === "ok"
+                ? "text-foreground"
+                : "text-muted-foreground"
+          }`}
+        >
           {status.label}
         </div>
         {sortedProfiles.length === 0 ? (
@@ -807,9 +1064,7 @@ function Dossier({ lead, updateLead }: { lead: Lead; updateLead: (id: string, pa
                   className="grid grid-cols-[8rem_1fr_auto] items-center gap-3 px-1 py-2.5 hover:bg-foreground/[0.04]"
                 >
                   <span className="mono text-muted-foreground">{PROFILE_LABEL[p.type]}</span>
-                  <span className="text-sm text-foreground truncate">
-                    {p.label || p.url}
-                  </span>
+                  <span className="text-sm text-foreground truncate">{p.label || p.url}</span>
                   <span className="mono text-muted-foreground inline-flex items-center gap-1">
                     OPEN <ExternalLink className="h-3 w-3" />
                   </span>
@@ -828,10 +1083,17 @@ function Dossier({ lead, updateLead }: { lead: Lead; updateLead: (id: string, pa
             label="REVIEWS"
             value={
               e.reviews.length
-                ? e.reviews.map((r) => {
-                    const bits = [r.rating ? `${r.rating}★` : null, r.count ? `${r.count} reviews` : null].filter(Boolean).join(" · ");
-                    return `${r.source} — ${bits || "found"}`;
-                  }).join("  ·  ")
+                ? e.reviews
+                    .map((r) => {
+                      const bits = [
+                        r.rating ? `${r.rating}★` : null,
+                        r.count ? `${r.count} reviews` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ");
+                      return `${r.source} — ${bits || "found"}`;
+                    })
+                    .join("  ·  ")
                 : null
             }
           />
@@ -846,12 +1108,15 @@ function Dossier({ lead, updateLead }: { lead: Lead; updateLead: (id: string, pa
         <div className="mono text-muted-foreground mb-2">— Pitch Angle</div>
         {lead.unverified ? (
           <p className="mono text-[color:var(--sienna)] leading-relaxed border border-[color:var(--sienna)] p-4">
-            {e.pitchAngle || `⚠ Poor prospect — ${(lead.unverifiedReason || "unverified").toLowerCase()}. Skip or verify basics before spending call time.`}
+            {e.pitchAngle ||
+              `⚠ Poor prospect — ${(lead.unverifiedReason || "unverified").toLowerCase()}. Skip or verify basics before spending call time.`}
           </p>
         ) : (
           <div className="border border-border tint-frog p-4">
             {e.pitchAngle ? (
-              <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{e.pitchAngle}</p>
+              <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+                {e.pitchAngle}
+              </p>
             ) : (
               <p className="text-sm text-foreground leading-relaxed">{pitchAngle(lead)}</p>
             )}

@@ -1,8 +1,16 @@
 // Server-only enrichment pipeline: Firecrawl web search + optional deep
-// profile scrape + Lovable AI pitch-angle generation. Used by the
-// generate-leads batch route and the single-lead re-research route.
+// profile scrape + AI pitch-angle generation (provider-agnostic — see
+// ai.server.ts). Used by the generate-leads batch route and the single-lead
+// re-research route.
 
-import type { LeadEnrichment, LeadProfile, LeadProfileType, LeadReviews, VerificationTier } from "./types";
+import type {
+  LeadEnrichment,
+  LeadProfile,
+  LeadProfileType,
+  LeadReviews,
+  VerificationTier,
+} from "./types";
+import { aiText, type AIConfig } from "./ai.server";
 
 const SEARCH_TIMEOUT_MS = 9000;
 const SCRAPE_TIMEOUT_MS = 8000;
@@ -11,16 +19,30 @@ const SITE_FETCH_TIMEOUT_MS = 7000;
 const CURRENT_YEAR = new Date().getFullYear();
 
 const DIRECTORY_HOSTS = [
-  "yelp.com", "yellowpages.com", "mapquest.com", "angi.com", "houzz.com",
-  "bbb.org", "manta.com", "foursquare.com", "tripadvisor.com", "porch.com",
-  "homeadvisor.com", "thumbtack.com", "nextdoor.com", "alignable.com",
+  "yelp.com",
+  "yellowpages.com",
+  "mapquest.com",
+  "angi.com",
+  "houzz.com",
+  "bbb.org",
+  "manta.com",
+  "foursquare.com",
+  "tripadvisor.com",
+  "porch.com",
+  "homeadvisor.com",
+  "thumbtack.com",
+  "nextdoor.com",
+  "alignable.com",
 ];
 
 export function hostOf(u: string): string | null {
   try {
-    return new URL(u.startsWith("http") ? u : `https://${u}`)
-      .hostname.toLowerCase().replace(/^www\./, "");
-  } catch { return null; }
+    return new URL(u.startsWith("http") ? u : `https://${u}`).hostname
+      .toLowerCase()
+      .replace(/^www\./, "");
+  } catch {
+    return null;
+  }
 }
 
 function isOneOf(host: string, list: string[]): boolean {
@@ -34,15 +56,26 @@ export function classifyProfile(url: string): LeadProfileType | null {
   if (h === "instagram.com" || h.endsWith(".instagram.com")) return "instagram";
   if (h === "yelp.com" || h.endsWith(".yelp.com")) return "yelp";
   if (h === "linkedin.com" || h.endsWith(".linkedin.com")) return "linkedin";
-  if (h.includes("google.") && (url.includes("/maps") || url.includes("g.co/kgs") || url.includes("business.google"))) return "google-business";
+  if (
+    h.includes("google.") &&
+    (url.includes("/maps") || url.includes("g.co/kgs") || url.includes("business.google"))
+  )
+    return "google-business";
   if (isOneOf(h, DIRECTORY_HOSTS)) return "directory";
   return null;
 }
 
 type FirecrawlSearchItem = { url?: string; title?: string; description?: string };
-type FirecrawlSearchResp = { success?: boolean; data?: { web?: FirecrawlSearchItem[] } | FirecrawlSearchItem[] };
+type FirecrawlSearchResp = {
+  success?: boolean;
+  data?: { web?: FirecrawlSearchItem[] } | FirecrawlSearchItem[];
+};
 
-async function firecrawlSearch(query: string, apiKey: string, limit = 10): Promise<FirecrawlSearchItem[]> {
+async function firecrawlSearch(
+  query: string,
+  apiKey: string,
+  limit = 10,
+): Promise<FirecrawlSearchItem[]> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), SEARCH_TIMEOUT_MS);
   try {
@@ -65,7 +98,11 @@ async function firecrawlSearch(query: string, apiKey: string, limit = 10): Promi
   }
 }
 
-type FirecrawlDoc = { html?: string; markdown?: string; metadata?: { title?: string; description?: string } };
+type FirecrawlDoc = {
+  html?: string;
+  markdown?: string;
+  metadata?: { title?: string; description?: string };
+};
 
 async function firecrawlScrape(url: string, apiKey: string): Promise<FirecrawlDoc | null> {
   const ctrl = new AbortController();
@@ -74,21 +111,31 @@ async function firecrawlScrape(url: string, apiKey: string): Promise<FirecrawlDo
     const res = await fetch("https://api.firecrawl.dev/v2/scrape", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ url, formats: ["markdown"], onlyMainContent: true, timeout: SCRAPE_TIMEOUT_MS }),
+      body: JSON.stringify({
+        url,
+        formats: ["markdown"],
+        onlyMainContent: true,
+        timeout: SCRAPE_TIMEOUT_MS,
+      }),
       signal: ctrl.signal,
     });
     if (!res.ok) return null;
     const json = (await res.json()) as { success?: boolean; data?: FirecrawlDoc };
     if (!json?.success) return null;
     return json.data ?? null;
-  } catch { return null; } finally { clearTimeout(timer); }
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // Parse "4.6 stars", "4.6/5", "Rating 4.6" and "214 reviews", "(214)"
 function parseReviewSnippet(text: string): { rating?: number; count?: number } {
   const rating = text.match(/(?:^|[^0-9])([1-5](?:\.[0-9])?)\s*(?:stars?|★|\/\s*5|\()/i);
-  const count = text.match(/([0-9][0-9,]{0,6})\s*(?:reviews?|ratings?)/i)
-             || text.match(/\(([0-9][0-9,]{1,6})\)/);
+  const count =
+    text.match(/([0-9][0-9,]{0,6})\s*(?:reviews?|ratings?)/i) ||
+    text.match(/\(([0-9][0-9,]{1,6})\)/);
   return {
     rating: rating ? parseFloat(rating[1]) : undefined,
     count: count ? parseInt(count[1].replace(/,/g, ""), 10) : undefined,
@@ -101,19 +148,24 @@ function parseRecentActivity(text: string): string | undefined {
 }
 
 function parseHours(md: string): string | undefined {
-  const dayRE = /(mon|tue|wed|thu|fri|sat|sun)[^\n]{0,60}?(\d{1,2}(?::\d{2})?\s*(?:am|pm))[^\n]{0,20}?(\d{1,2}(?::\d{2})?\s*(?:am|pm))/gi;
+  const dayRE =
+    /(mon|tue|wed|thu|fri|sat|sun)[^\n]{0,60}?(\d{1,2}(?::\d{2})?\s*(?:am|pm))[^\n]{0,20}?(\d{1,2}(?::\d{2})?\s*(?:am|pm))/gi;
   const lines: string[] = [];
   let m: RegExpExecArray | null;
   while ((m = dayRE.exec(md)) && lines.length < 7) {
     lines.push(`${m[1][0].toUpperCase()}${m[1].slice(1).toLowerCase()} ${m[2]}–${m[3]}`);
   }
   if (lines.length) return lines.join(" · ");
-  const generic = md.match(/(open|hours)[^\n]{0,80}?(\d{1,2}(?::\d{2})?\s*(?:am|pm)[^\n]{0,20}?\d{1,2}(?::\d{2})?\s*(?:am|pm))/i);
+  const generic = md.match(
+    /(open|hours)[^\n]{0,80}?(\d{1,2}(?::\d{2})?\s*(?:am|pm)[^\n]{0,20}?\d{1,2}(?::\d{2})?\s*(?:am|pm))/i,
+  );
   return generic ? generic[0].slice(0, 80) : undefined;
 }
 
 function parseOwnerName(md: string): string | undefined {
-  const m = md.match(/(?:owner|founder|proprietor|operated by|owned by)[:\s]+([A-Z][a-zA-Z.'-]+(?:\s+[A-Z][a-zA-Z.'-]+){1,2})/);
+  const m = md.match(
+    /(?:owner|founder|proprietor|operated by|owned by)[:\s]+([A-Z][a-zA-Z.'-]+(?:\s+[A-Z][a-zA-Z.'-]+){1,2})/,
+  );
   return m ? m[1] : undefined;
 }
 
@@ -123,8 +175,8 @@ function parseRating(md: string): { rating?: number; count?: number } {
 
 function parseFbLastActivity(md: string): string | undefined {
   // Firecrawl-normalized Facebook markdown often contains "· 3d" / "· 2h"
-  const m = md.match(/·\s*(\d+)\s*(d|h|w|m|y|mo)\b/i)
-         || md.match(/(\d+)\s*(day|week|month|hour)s?\s*ago/i);
+  const m =
+    md.match(/·\s*(\d+)\s*(d|h|w|m|y|mo)\b/i) || md.match(/(\d+)\s*(day|week|month|hour)s?\s*ago/i);
   if (!m) return undefined;
   return m[0].replace(/·\s*/, "").trim();
 }
@@ -162,13 +214,21 @@ function cityMentioned(md: string, city: string): boolean {
 function detectClosure(md: string): string | null {
   if (/permanently closed/i.test(md)) return "marked permanently closed";
   if (/temporarily closed|closed until further notice/i.test(md)) return "marked closed";
-  if (/this page isn'?t available|content isn'?t available|page (has been )?removed|page not found|content not available/i.test(md)) return "profile page removed";
-  if (/out of business|no longer in business|shut down/i.test(md)) return "reported out of business";
+  if (
+    /this page isn'?t available|content isn'?t available|page (has been )?removed|page not found|content not available/i.test(
+      md,
+    )
+  )
+    return "profile page removed";
+  if (/out of business|no longer in business|shut down/i.test(md))
+    return "reported out of business";
   return null;
 }
 
 /** Cheap plain-fetch verification of a website host. Returns whether it loaded real content. */
-async function verifyWebsiteAlive(host: string): Promise<{ alive: boolean; finalHost?: string; body?: string; reason?: string }> {
+async function verifyWebsiteAlive(
+  host: string,
+): Promise<{ alive: boolean; finalHost?: string; body?: string; reason?: string }> {
   const url = `https://${host}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), SITE_FETCH_TIMEOUT_MS);
@@ -182,7 +242,11 @@ async function verifyWebsiteAlive(host: string): Promise<{ alive: boolean; final
     if (!res.ok) return { alive: false, reason: `status ${res.status}` };
     const body = await res.text();
     if (body.length < 400) return { alive: false, body, reason: "empty page" };
-    if (/domain (is )?for sale|buy this domain|parked (free )?by|godaddy\.com\/domains|sedoparking|hugedomains|this domain may be for sale/i.test(body)) {
+    if (
+      /domain (is )?for sale|buy this domain|parked (free )?by|godaddy\.com\/domains|sedoparking|hugedomains|this domain may be for sale/i.test(
+        body,
+      )
+    ) {
       return { alive: false, body, reason: "parked domain" };
     }
     const finalHost = hostOf(res.url) ?? host;
@@ -205,7 +269,9 @@ async function verifyWebsiteAlive(host: string): Promise<{ alive: boolean; final
 
 function isBodyOutdated(body: string): boolean {
   if (body && !/<meta[^>]+name=["']viewport["']/i.test(body)) return true;
-  const years = Array.from(body.matchAll(/(?:©|&copy;|copyright)[^0-9]{0,20}(20\d{2})/gi)).map((m) => parseInt(m[1], 10));
+  const years = Array.from(body.matchAll(/(?:©|&copy;|copyright)[^0-9]{0,20}(20\d{2})/gi)).map(
+    (m) => parseInt(m[1], 10),
+  );
   if (years.length) {
     const latest = Math.max(...years);
     if (CURRENT_YEAR - latest > 5) return true;
@@ -217,7 +283,12 @@ type ProfileVerdict = {
   match: "phone" | "name+city" | "name" | "none";
   closure: string | null;
 };
-function evaluateProfile(md: string, business: string, city: string, phone: string): ProfileVerdict {
+function evaluateProfile(
+  md: string,
+  business: string,
+  city: string,
+  phone: string,
+): ProfileVerdict {
   const closure = detectClosure(md);
   const phoneOk = phoneMatches(md, phone);
   const nameOk = nameSimilar(md, business);
@@ -234,8 +305,8 @@ export interface EnrichInput {
   city: string;
   state: string;
   phone: string;
-  website?: string | null;         // host only
-  websiteOpportunity?: string;     // used for websiteStatus classification
+  website?: string | null; // host only
+  websiteOpportunity?: string; // used for websiteStatus classification
 }
 
 export interface EnrichResult {
@@ -253,13 +324,11 @@ async function generatePitchAngle(
   enrichment: LeadEnrichment,
   unverified: boolean,
   unverifiedReason: string | undefined,
-  aiKey: string,
+  ai: AIConfig,
 ): Promise<string | undefined> {
   if (unverified) {
     return `⚠ Poor prospect — ${unverifiedReason ?? "unverified"}. Skip or verify basics before spending call time.`;
   }
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
   try {
     const facts = {
       business: input.business,
@@ -274,27 +343,17 @@ async function generatePitchAngle(
       recentActivity: enrichment.recentActivity ?? null,
       verifiedSummary: enrichment.verifiedSummary ?? null,
     };
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${aiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You brief a solo web designer before a cold call. Write a tight 2–4 sentence pitch angle explaining why THIS specific business is a good website prospect. Ground every claim in the JSON facts provided — never invent details. Cite specific evidence (review counts, active socials, no website, outdated site, etc). Be direct, no filler, no marketing fluff.",
-          },
-          { role: "user", content: `Facts:\n${JSON.stringify(facts, null, 2)}` },
-        ],
-      }),
-      signal: ctrl.signal,
+    const text = await aiText(ai, {
+      system:
+        "You brief a solo web designer before a cold call. Write a tight 2–4 sentence pitch angle explaining why THIS specific business is a good website prospect. Ground every claim in the JSON facts provided — never invent details. Cite specific evidence (review counts, active socials, no website, outdated site, etc). Be direct, no filler, no marketing fluff.",
+      user: `Facts:\n${JSON.stringify(facts, null, 2)}`,
+      maxTokens: 1024,
+      timeoutMs: AI_TIMEOUT_MS,
     });
-    if (!res.ok) return undefined;
-    const data = await res.json() as { choices?: { message?: { content?: string } }[] };
-    const text = data?.choices?.[0]?.message?.content?.trim();
     return text || undefined;
-  } catch { return undefined; } finally { clearTimeout(timer); }
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -304,9 +363,9 @@ async function generatePitchAngle(
  */
 export async function enrichLeadFull(
   input: EnrichInput,
-  opts: { firecrawlKey: string; aiKey?: string },
+  opts: { firecrawlKey: string; ai?: AIConfig | null },
 ): Promise<EnrichResult> {
-  const { firecrawlKey, aiKey } = opts;
+  const { firecrawlKey, ai } = opts;
   const q = `"${input.business}" ${input.city} ${input.state}`;
   const results = await firecrawlSearch(q, firecrawlKey, 10);
 
@@ -328,8 +387,16 @@ export async function enrichLeadFull(
     const snip = `${r.title || ""} ${r.description || ""}`;
     const rv = parseReviewSnippet(snip);
     if (rv.rating || rv.count) {
-      const src = t === "google-business" ? "Google" : t === "yelp" ? "Yelp" : t === "facebook" ? "Facebook" : t;
-      if (!reviews.some((x) => x.source === src)) reviews.push({ source: src, rating: rv.rating, count: rv.count });
+      const src =
+        t === "google-business"
+          ? "Google"
+          : t === "yelp"
+            ? "Yelp"
+            : t === "facebook"
+              ? "Facebook"
+              : t;
+      if (!reviews.some((x) => x.source === src))
+        reviews.push({ source: src, rating: rv.rating, count: rv.count });
     }
     if (!recentActivity) {
       const ra = parseRecentActivity(snip);
@@ -349,7 +416,9 @@ export async function enrichLeadFull(
 
   let hours: string | undefined;
   let ownerName: string | undefined;
-  let verifiedSummary: string | undefined = results[0]?.description ? results[0].description.slice(0, 220) : undefined;
+  let verifiedSummary: string | undefined = results[0]?.description
+    ? results[0].description.slice(0, 220)
+    : undefined;
 
   const toDeepScrape = [
     candidateProfiles.find((p) => p.type === "google-business"),
@@ -360,7 +429,10 @@ export async function enrichLeadFull(
     try {
       const doc = await firecrawlScrape(cand.url, firecrawlKey);
       const md = (doc?.markdown || "").slice(0, 12000);
-      if (!md) { profileMatchFailed = true; continue; }
+      if (!md) {
+        profileMatchFailed = true;
+        continue;
+      }
 
       const verdict = evaluateProfile(md, input.business, input.city, input.phone);
       if (verdict.match === "none") {
@@ -446,7 +518,10 @@ export async function enrichLeadFull(
   let score = 30; // baseline: found in Places
   const evidence: string[] = [];
 
-  if (input.phone) { score += 15; evidence.push("phone listed"); } else evidence.push("no phone");
+  if (input.phone) {
+    score += 15;
+    evidence.push("phone listed");
+  } else evidence.push("no phone");
 
   const hasFB = profiles.some((p) => p.type === "facebook");
   const hasIG = profiles.some((p) => p.type === "instagram");
@@ -462,11 +537,16 @@ export async function enrichLeadFull(
 
   if (reviews.length) {
     const top = reviews[0];
-    const chip = [top.rating ? `${top.rating}★` : null, top.count ? `${top.count} reviews` : null].filter(Boolean).join(" · ");
+    const chip = [top.rating ? `${top.rating}★` : null, top.count ? `${top.count} reviews` : null]
+      .filter(Boolean)
+      .join(" · ");
     if (chip) evidence.push(chip);
     score += 10;
   }
-  if (recentActivity) { score += 8; evidence.push(recentActivity); }
+  if (recentActivity) {
+    score += 8;
+    evidence.push(recentActivity);
+  }
   if (hours) evidence.push("hours known");
   if (ownerName) evidence.push(`owner: ${ownerName}`);
 
@@ -474,15 +554,23 @@ export async function enrichLeadFull(
     score -= 15;
     evidence.push("claimed site unreachable");
   } else if (websiteStatus === "none") {
-    score -= 5; evidence.push("no website");
+    score -= 5;
+    evidence.push("no website");
   } else if (websiteStatus === "outdated") {
-    score += 5; evidence.push("outdated site (verified)");
+    score += 5;
+    evidence.push("outdated site (verified)");
   } else if (websiteStatus === "good") {
     evidence.push("website verified");
   }
 
-  if (phoneVerifiedOnProfile) { score += 10; evidence.push("phone matches FB/GMB"); }
-  if (profileMatchFailed && !anyIdentityMatch) { score -= 15; evidence.push("profile match uncertain"); }
+  if (phoneVerifiedOnProfile) {
+    score += 10;
+    evidence.push("phone matches FB/GMB");
+  }
+  if (profileMatchFailed && !anyIdentityMatch) {
+    score -= 15;
+    evidence.push("profile match uncertain");
+  }
 
   // ── Unverified flags ──
   let unverified = false;
@@ -493,9 +581,17 @@ export async function enrichLeadFull(
     evidence.push("closed on page");
     score = Math.min(score, 10);
   } else if (!input.phone && profileCount === 0 && websiteStatus !== "good") {
-    unverified = true; unverifiedReason = "could not verify business exists"; score -= 30;
-  } else if (websiteStatus === "good" && profileCount >= 2 && reviews.length && (reviews[0].count ?? 0) > 50) {
-    unverified = true; unverifiedReason = "already has strong modern presence — poor prospect";
+    unverified = true;
+    unverifiedReason = "could not verify business exists";
+    score -= 30;
+  } else if (
+    websiteStatus === "good" &&
+    profileCount >= 2 &&
+    reviews.length &&
+    (reviews[0].count ?? 0) > 50
+  ) {
+    unverified = true;
+    unverifiedReason = "already has strong modern presence — poor prospect";
   }
 
   score = Math.max(0, Math.min(100, Math.round(score)));
@@ -512,8 +608,8 @@ export async function enrichLeadFull(
     lastVerifiedAt,
   };
 
-  if (aiKey) {
-    const pitch = await generatePitchAngle(input, enrichment, unverified, unverifiedReason, aiKey);
+  if (ai) {
+    const pitch = await generatePitchAngle(input, enrichment, unverified, unverifiedReason, ai);
     if (pitch) enrichment.pitchAngle = pitch;
   }
 
@@ -546,7 +642,8 @@ export async function enrichLeadFull(
 
   if (tier === "verified") verificationReasons.unshift("identity confirmed");
   if (phoneVerifiedOnProfile) verificationReasons.push("phone matched on profile page");
-  if (profileMatchFailed && !anyIdentityMatch) verificationReasons.push("scraped profile didn't match business");
+  if (profileMatchFailed && !anyIdentityMatch)
+    verificationReasons.push("scraped profile didn't match business");
 
   return {
     enrichment,
@@ -559,12 +656,20 @@ export async function enrichLeadFull(
   };
 }
 
-export async function runWithConcurrency<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+export async function runWithConcurrency<T>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<void>,
+): Promise<void> {
   let i = 0;
   const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
     while (i < items.length) {
       const idx = i++;
-      try { await fn(items[idx]); } catch { /* swallow */ }
+      try {
+        await fn(items[idx]);
+      } catch {
+        /* swallow */
+      }
     }
   });
   await Promise.all(workers);

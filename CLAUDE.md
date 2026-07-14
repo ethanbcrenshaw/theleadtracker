@@ -18,9 +18,11 @@ Originally built on Lovable; database now lives in a self-managed Supabase proje
 - `SUPABASE_SERVICE_ROLE_KEY` — server-only admin client (`client.server.ts`)
 - `GOOGLE_PLACES_API_KEY` — lead discovery
 - `FIRECRAWL_API_KEY` — enrichment/verification scraping
-- `LOVABLE_API_KEY` — Lovable AI gateway (`ai.gateway.lovable.dev`) used by assistant,
-  call scripts, daily brief, call summaries, pitch angles. Injected automatically on
-  Lovable-hosted deploys; must be set manually elsewhere.
+- AI provider (first match wins — see `src/lib/ai.server.ts`): `ANTHROPIC_API_KEY`
+  (Claude via official SDK, default model `claude-opus-4-8`), `GEMINI_API_KEY`
+  (Google OpenAI-compat endpoint), or `LOVABLE_API_KEY` (Lovable gateway; injected
+  automatically on Lovable-hosted deploys). Used by assistant, call scripts, daily
+  brief, call summaries, pitch angles.
 
 ## Database (Supabase project `bldyruumvdaxuplcnacz`, ca-central-1)
 
@@ -71,6 +73,24 @@ All mutations are optimistic: update local state, then fire-and-forget the DB wr
 - `src/lib/discover.server.ts` — same Places search extracted for reuse by the assistant.
 - `src/components/crm/AIGenerateModal.tsx` — drives the flow: calls generate-leads, then
   enriches candidates one-by-one via `/api/enrich-candidate` for per-lead progress UI.
+
+### Verification checks (Phase 2 pipeline)
+- `src/lib/verification.server.ts` — post-discovery check pass: website liveness
+  (live/dead/parked/redirect-social/none, ≤3 redirect hops, 5s timeouts), freshness
+  heuristics (copyright year, viewport meta, HTTPS), business-alive signals passed
+  through from Places (status/rating/review count/last review), and the composite
+  0-100 `leadScore` (`computeLeadScore`). Results persist as `leads.verification`
+  (jsonb) + `leads.leadScore` (int, indexed). CLOSED businesses are discarded at
+  discovery (`isClosed` in discover.server.ts). Re-verify paths carry business
+  signals over from the last stored check (no fresh Places call).
+- UI: `VerificationFacts` block in LeadDetail's Dossier; SCORE chip in
+  AIGenerateModal review rows.
+
+### AI provider layer
+- `src/lib/ai.server.ts` — provider-agnostic chat (`getAI`, `aiChat`, `aiText`,
+  `aiExtract`). Anthropic branch uses the official `@anthropic-ai/sdk` (native
+  Messages API, tools mapped from the normalized OpenAI-flavored shape); Gemini and
+  Lovable use their OpenAI-compatible endpoints. All AI routes go through this.
 
 ### Enrichment & verification (Firecrawl + AI)
 - `src/lib/enrichment.server.ts` — the pipeline (`enrichLeadFull`): Firecrawl search +

@@ -54,9 +54,9 @@ export interface LeadProfile {
 }
 
 export interface LeadReviews {
-  source: string;   // "Google", "Yelp", "Facebook"
-  rating?: number;  // e.g. 4.6
-  count?: number;   // e.g. 214
+  source: string; // "Google", "Yelp", "Facebook"
+  rating?: number; // e.g. 4.6
+  count?: number; // e.g. 214
 }
 
 export interface LeadEnrichment {
@@ -112,6 +112,33 @@ export interface CallScript {
 
 export type VerificationTier = "verified" | "partial" | "unverified";
 
+export type WebsiteCheckStatus = "live" | "dead" | "parked" | "redirect-social" | "none";
+
+/** Structured results of the automated verification pass (Phase 2 pipeline). */
+export interface LeadVerification {
+  website: {
+    status: WebsiteCheckStatus;
+    url?: string; // the URL that was checked
+    finalUrl?: string; // after redirects
+    httpStatus?: number;
+    redirects?: number;
+    reason?: string; // human-readable failure/classification detail
+  };
+  freshness?: {
+    copyrightYear?: number;
+    hasViewportMeta?: boolean;
+    https?: boolean;
+    outdated: boolean;
+  };
+  business: {
+    businessStatus?: string; // OPERATIONAL | CLOSED_TEMPORARILY | CLOSED_PERMANENTLY
+    rating?: number;
+    reviewCount?: number;
+    lastReviewAt?: string; // ISO — most recent review, when available
+  };
+  checkedAt: string; // ISO
+}
+
 export interface Lead {
   id: string;
   priority: number;
@@ -137,12 +164,14 @@ export interface Lead {
   aiNextAction?: string;
   zoomBooked?: boolean;
   zoomDate?: string;
-  confidenceScore?: number;         // 0-100
-  confidenceEvidence?: string[];    // short chip strings
+  confidenceScore?: number; // 0-100
+  confidenceEvidence?: string[]; // short chip strings
   unverified?: boolean;
   unverifiedReason?: string;
   enrichment?: LeadEnrichment;
   callScript?: CallScript;
   verificationTier?: VerificationTier;
   verificationReasons?: string[];
+  leadScore?: number; // composite 0-100 opportunity score
+  verification?: LeadVerification;
 }

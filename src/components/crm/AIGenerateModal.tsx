@@ -1,8 +1,25 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, X, Loader2, AlertCircle, Check, ExternalLink, Globe, Phone, MapPin } from "lucide-react";
+import {
+  Sparkles,
+  X,
+  Loader2,
+  AlertCircle,
+  Check,
+  ExternalLink,
+  Globe,
+  Phone,
+  MapPin,
+} from "lucide-react";
 import { useLeads } from "@/lib/store";
-import type { Lead, LeadEnrichment, LeadSource, VerificationTier, WebsiteOpportunity } from "@/lib/types";
+import type {
+  Lead,
+  LeadEnrichment,
+  LeadSource,
+  LeadVerification,
+  VerificationTier,
+  WebsiteOpportunity,
+} from "@/lib/types";
 
 interface Props {
   open: boolean;
@@ -12,10 +29,24 @@ interface Props {
 }
 
 const ALLOWED_SOURCES: LeadSource[] = [
-  "Yelp","Facebook","Google Business","Angie's List","MapQuest","Website","Instagram","Houzz","Directory","Other",
+  "Yelp",
+  "Facebook",
+  "Google Business",
+  "Angie's List",
+  "MapQuest",
+  "Website",
+  "Instagram",
+  "Houzz",
+  "Directory",
+  "Other",
 ];
 const ALLOWED_OPP: WebsiteOpportunity[] = [
-  "No Dedicated Website","Facebook Only","Yelp/Directory Only","Outdated Website","Has Website","Social-Heavy",
+  "No Dedicated Website",
+  "Facebook Only",
+  "Yelp/Directory Only",
+  "Outdated Website",
+  "Has Website",
+  "Social-Heavy",
 ];
 
 function qualityFor(opp: WebsiteOpportunity): "High" | "Medium" | "Low" {
@@ -36,6 +67,12 @@ type Candidate = {
   onlinePresence: string;
   websiteOpportunity: string;
   matchesFilter: boolean;
+  placesSignals?: {
+    businessStatus?: string;
+    rating?: number;
+    reviewCount?: number;
+    lastReviewAt?: string;
+  };
   // filled during enrichment phase
   enrichment?: LeadEnrichment;
   confidenceScore?: number;
@@ -44,6 +81,8 @@ type Candidate = {
   unverifiedReason?: string;
   verificationTier?: VerificationTier;
   verificationReasons?: string[];
+  verification?: LeadVerification;
+  leadScore?: number;
   _id: string;
   _selected: boolean;
   _enrichState: "pending" | "running" | "done" | "failed";
@@ -53,12 +92,20 @@ type Phase = "form" | "searching" | "enriching" | "review";
 
 const ENRICH_CONCURRENCY = 3;
 
-async function runConcurrent<T>(items: T[], limit: number, fn: (item: T, idx: number) => Promise<void>) {
+async function runConcurrent<T>(
+  items: T[],
+  limit: number,
+  fn: (item: T, idx: number) => Promise<void>,
+) {
   let i = 0;
   const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
     while (i < items.length) {
       const idx = i++;
-      try { await fn(items[idx], idx); } catch { /* swallow per-item */ }
+      try {
+        await fn(items[idx], idx);
+      } catch {
+        /* swallow per-item */
+      }
     }
   });
   await Promise.all(workers);
@@ -88,7 +135,10 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
     setPhase("form");
     setEnrichDone(0);
   }
-  function close() { reset(); onClose(); }
+  function close() {
+    reset();
+    onClose();
+  }
 
   async function start() {
     setError(null);
@@ -145,6 +195,7 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
               phone: cand.phone,
               website: cand.website,
               websiteOpportunity: cand.websiteOpportunity,
+              placesSignals: cand.placesSignals,
             }),
           });
           const j = await r.json();
@@ -157,6 +208,8 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
           cand.unverifiedReason = result.unverifiedReason;
           cand.verificationTier = result.verificationTier;
           cand.verificationReasons = result.verificationReasons;
+          cand.verification = result.verification;
+          cand.leadScore = result.leadScore;
 
           // Reflect verified website status back onto the opp label.
           const ws = result.enrichment?.websiteStatus;
@@ -180,7 +233,9 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
       });
 
       // Pre-select only VERIFIED candidates after enrichment.
-      setCandidates((cs) => cs.map((c) => ({ ...c, _selected: c.verificationTier === "verified" })));
+      setCandidates((cs) =>
+        cs.map((c) => ({ ...c, _selected: c.verificationTier === "verified" })),
+      );
       setPhase("review");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
@@ -198,8 +253,9 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
     const basePriority = (existing.reduce((m, l) => Math.max(m, l.priority), 0) || 0) + 1;
 
     const leads: Lead[] = picked.map((r, i) => {
-      const sources = (r.sources || [])
-        .filter((s) => (ALLOWED_SOURCES as string[]).includes(s)) as LeadSource[];
+      const sources = (r.sources || []).filter((s) =>
+        (ALLOWED_SOURCES as string[]).includes(s),
+      ) as LeadSource[];
       const opp = (ALLOWED_OPP as string[]).includes(r.websiteOpportunity)
         ? (r.websiteOpportunity as WebsiteOpportunity)
         : type;
@@ -227,6 +283,8 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
         unverifiedReason: r.unverifiedReason,
         verificationTier: r.verificationTier,
         verificationReasons: r.verificationReasons,
+        verification: r.verification,
+        leadScore: r.leadScore,
       };
     });
 
@@ -243,44 +301,89 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
     <AnimatePresence>
       {open && (
         <>
-          <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-            className="fixed inset-0 bg-background/60 backdrop-blur-sm z-40" onClick={close} />
           <motion.div
-            initial={{opacity:0, y:10}} animate={{opacity:1, y:0}} exit={{opacity:0, y:10}}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-background/60 backdrop-blur-sm z-40"
+            onClick={close}
+          />
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
             className="fixed inset-0 z-50 grid place-items-center p-4 pointer-events-none"
           >
-            <div className={`bg-background border border-foreground w-full pointer-events-auto ${phase === "review" || phase === "enriching" ? "max-w-3xl" : "max-w-md"} max-h-[90vh] flex flex-col`}>
+            <div
+              className={`bg-background border border-foreground w-full pointer-events-auto ${phase === "review" || phase === "enriching" ? "max-w-3xl" : "max-w-md"} max-h-[90vh] flex flex-col`}
+            >
               <div className="flex items-center justify-between p-6 pb-4 border-b border-border">
                 <div>
                   <div className="mono text-muted-foreground">— AI Generate</div>
                   <h2 className="font-display text-2xl mt-1 lowercase font-normal">
-                    {phase === "review" ? "review found leads"
-                      : phase === "enriching" ? "verifying leads"
-                      : phase === "searching" ? "searching"
-                      : "generate leads"}
+                    {phase === "review"
+                      ? "review found leads"
+                      : phase === "enriching"
+                        ? "verifying leads"
+                        : phase === "searching"
+                          ? "searching"
+                          : "generate leads"}
                   </h2>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button onClick={close} className="mono text-muted-foreground hover:text-foreground">[ ESC ]</button>
-                  <button onClick={close} aria-label="Close" className="p-1 hover:bg-foreground/10"><X className="h-4 w-4" /></button>
+                  <button
+                    onClick={close}
+                    className="mono text-muted-foreground hover:text-foreground"
+                  >
+                    [ ESC ]
+                  </button>
+                  <button onClick={close} aria-label="Close" className="p-1 hover:bg-foreground/10">
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
 
               {phase === "form" && (
                 <div className="p-6 overflow-y-auto">
                   <p className="mono text-muted-foreground mb-4">
-                    Searches the live web, then <span className="text-foreground">actually fetches</span> each
-                    candidate's website and profile pages to verify they exist and belong to this business.
-                    Slower — takes a couple of minutes for a full batch — but every claim is checked.
+                    Searches the live web, then{" "}
+                    <span className="text-foreground">actually fetches</span> each candidate's
+                    website and profile pages to verify they exist and belong to this business.
+                    Slower — takes a couple of minutes for a full batch — but every claim is
+                    checked.
                   </p>
                   <div className="space-y-3">
-                    <Field label="Industry"><input value={industry} onChange={(e) => setIndustry(e.target.value)} className="input" /></Field>
-                    <Field label="City, State"><input value={city} onChange={(e) => setCity(e.target.value)} className="input" placeholder="Nashville, TN" /></Field>
+                    <Field label="Industry">
+                      <input
+                        value={industry}
+                        onChange={(e) => setIndustry(e.target.value)}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="City, State">
+                      <input
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        className="input"
+                        placeholder="Nashville, TN"
+                      />
+                    </Field>
                     <Field label="Number of leads">
-                      <input type="number" min={1} max={15} value={count} onChange={(e) => setCount(+e.target.value)} className="input" />
+                      <input
+                        type="number"
+                        min={1}
+                        max={15}
+                        value={count}
+                        onChange={(e) => setCount(+e.target.value)}
+                        className="input"
+                      />
                     </Field>
                     <Field label="Lead type">
-                      <select value={type} onChange={(e) => setType(e.target.value as WebsiteOpportunity)} className="input">
+                      <select
+                        value={type}
+                        onChange={(e) => setType(e.target.value as WebsiteOpportunity)}
+                        className="input"
+                      >
                         <option>No Dedicated Website</option>
                         <option>Facebook Only</option>
                         <option>Yelp/Directory Only</option>
@@ -313,23 +416,32 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
               {phase === "enriching" && (
                 <div className="p-6 overflow-y-auto flex-1 space-y-4">
                   <div className="mono text-foreground">
-                    RESEARCHING {String(enrichDone).padStart(2, "0")} / {String(candidates.length).padStart(2, "0")}
+                    RESEARCHING {String(enrichDone).padStart(2, "0")} /{" "}
+                    {String(candidates.length).padStart(2, "0")}
                   </div>
                   <div className="h-px bg-border">
                     <div
                       className="h-px bg-foreground transition-all"
-                      style={{ width: `${candidates.length ? (enrichDone / candidates.length) * 100 : 0}%` }}
+                      style={{
+                        width: `${candidates.length ? (enrichDone / candidates.length) * 100 : 0}%`,
+                      }}
                     />
                   </div>
                   <ul className="divide-y divide-border border-y border-border">
                     {candidates.map((c) => (
                       <li key={c._id} className="py-2 flex items-center gap-3">
                         <span className="mono text-muted-foreground w-20 shrink-0">
-                          {c._enrichState === "done" ? "✓ DONE"
-                            : c._enrichState === "failed" ? "✗ FAIL"
-                            : c._enrichState === "running" ? "…" : "—"}
+                          {c._enrichState === "done"
+                            ? "✓ DONE"
+                            : c._enrichState === "failed"
+                              ? "✗ FAIL"
+                              : c._enrichState === "running"
+                                ? "…"
+                                : "—"}
                         </span>
-                        <span className="text-sm text-foreground truncate flex-1">{c.business}</span>
+                        <span className="text-sm text-foreground truncate flex-1">
+                          {c.business}
+                        </span>
                         {c.verificationTier && <TierChip tier={c.verificationTier} />}
                       </li>
                     ))}
@@ -341,22 +453,37 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
                 <>
                   <div className="p-6 pt-4 overflow-y-auto flex-1 space-y-6">
                     <p className="mono text-muted-foreground">
-                      Only VERIFIED leads are pre-selected. PARTIAL and UNVERIFIED candidates
-                      can be imported anyway with an explicit checkbox — read the reason first.
+                      Only VERIFIED leads are pre-selected. PARTIAL and UNVERIFIED candidates can be
+                      imported anyway with an explicit checkbox — read the reason first.
                     </p>
                     {verified.length > 0 && (
-                      <Section title={`Verified (${verified.length})`} subtitle="Fetched a live site or an identity-matched profile page. Safe to import.">
-                        {verified.map((c) => <CandidateRow key={c._id} c={c} onToggle={toggle} />)}
+                      <Section
+                        title={`Verified (${verified.length})`}
+                        subtitle="Fetched a live site or an identity-matched profile page. Safe to import."
+                      >
+                        {verified.map((c) => (
+                          <CandidateRow key={c._id} c={c} onToggle={toggle} />
+                        ))}
                       </Section>
                     )}
                     {partial.length > 0 && (
-                      <Section title={`Partial (${partial.length})`} subtitle="Some signals matched, but verification was incomplete. Review before importing.">
-                        {partial.map((c) => <CandidateRow key={c._id} c={c} onToggle={toggle} />)}
+                      <Section
+                        title={`Partial (${partial.length})`}
+                        subtitle="Some signals matched, but verification was incomplete. Review before importing."
+                      >
+                        {partial.map((c) => (
+                          <CandidateRow key={c._id} c={c} onToggle={toggle} />
+                        ))}
                       </Section>
                     )}
                     {unverified.length > 0 && (
-                      <Section title={`Unverified (${unverified.length})`} subtitle="Failed verification — likely closed, wrong business, or no real presence.">
-                        {unverified.map((c) => <CandidateRow key={c._id} c={c} onToggle={toggle} />)}
+                      <Section
+                        title={`Unverified (${unverified.length})`}
+                        subtitle="Failed verification — likely closed, wrong business, or no real presence."
+                      >
+                        {unverified.map((c) => (
+                          <CandidateRow key={c._id} c={c} onToggle={toggle} />
+                        ))}
                       </Section>
                     )}
                     {!candidates.length && (
@@ -364,7 +491,13 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
                     )}
                   </div>
                   <div className="p-4 border-t border-border flex items-center justify-between gap-3">
-                    <button onClick={() => { setPhase("form"); setCandidates([]); }} className="mono ink-link">
+                    <button
+                      onClick={() => {
+                        setPhase("form");
+                        setCandidates([]);
+                      }}
+                      className="mono ink-link"
+                    >
                       [ BACK ]
                     </button>
                     <button
@@ -372,7 +505,8 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
                       disabled={!selectedCount}
                       className="mono inline-flex items-center gap-2 px-5 py-2.5 bg-foreground text-background hover:opacity-90 disabled:opacity-50"
                     >
-                      <Check className="h-3.5 w-3.5" /> [ IMPORT {String(selectedCount).padStart(3, "0")} ]
+                      <Check className="h-3.5 w-3.5" /> [ IMPORT{" "}
+                      {String(selectedCount).padStart(3, "0")} ]
                     </button>
                   </div>
                 </>
@@ -388,13 +522,23 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
 
 function TierChip({ tier }: { tier: VerificationTier }) {
   const cls =
-    tier === "verified" ? "border-foreground text-foreground"
-    : tier === "unverified" ? "border-[color:var(--sienna)] text-[color:var(--sienna)]"
-    : "border-border text-muted-foreground";
+    tier === "verified"
+      ? "border-foreground text-foreground"
+      : tier === "unverified"
+        ? "border-[color:var(--sienna)] text-[color:var(--sienna)]"
+        : "border-border text-muted-foreground";
   return <span className={`mono border px-1.5 py-0.5 ${cls}`}>{tier.toUpperCase()}</span>;
 }
 
-function Section({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
+function Section({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  children: React.ReactNode;
+}) {
   return (
     <div>
       <div className="mb-3 pb-2 border-b border-border">
@@ -412,7 +556,9 @@ function CandidateRow({ c, onToggle }: { c: Candidate; onToggle: (id: string) =>
   return (
     <label
       className={`flex items-start gap-3 p-3 border cursor-pointer transition ${
-        c._selected ? "border-foreground bg-foreground/[0.04]" : "border-border hover:bg-foreground/[0.02]"
+        c._selected
+          ? "border-foreground bg-foreground/[0.04]"
+          : "border-border hover:bg-foreground/[0.02]"
       } ${dim && !c._selected ? "opacity-70" : ""}`}
     >
       <input
@@ -426,8 +572,13 @@ function CandidateRow({ c, onToggle }: { c: Candidate; onToggle: (id: string) =>
           <p className="font-display text-lg truncate">{c.business}</p>
           <div className="flex items-center gap-2 mono text-muted-foreground shrink-0">
             <TierChip tier={tier} />
+            {typeof c.leadScore === "number" && (
+              <span className="text-foreground">SCORE {String(c.leadScore).padStart(2, "0")}</span>
+            )}
             {typeof c.confidenceScore === "number" && (
-              <span className="text-foreground">CONF {String(c.confidenceScore).padStart(2, "0")}</span>
+              <span className="text-foreground">
+                CONF {String(c.confidenceScore).padStart(2, "0")}
+              </span>
             )}
             <span>{c.websiteOpportunity}</span>
           </div>
@@ -441,23 +592,47 @@ function CandidateRow({ c, onToggle }: { c: Candidate; onToggle: (id: string) =>
         {(c.verificationReasons?.length ?? 0) > 0 && (
           <div className="flex flex-wrap gap-1 mt-2">
             {c.verificationReasons!.slice(0, 6).map((chip, i) => (
-              <span key={i} className={`mono border px-1.5 py-0.5 ${
-                /unreachable|didn't match|failed|closed/i.test(chip)
-                  ? "border-[color:var(--sienna)] text-[color:var(--sienna)]"
-                  : "border-border text-muted-foreground"
-              }`}>
+              <span
+                key={i}
+                className={`mono border px-1.5 py-0.5 ${
+                  /unreachable|didn't match|failed|closed/i.test(chip)
+                    ? "border-[color:var(--sienna)] text-[color:var(--sienna)]"
+                    : "border-border text-muted-foreground"
+                }`}
+              >
                 {chip}
               </span>
             ))}
           </div>
         )}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[11px] text-muted-foreground">
-          {(c.city || c.state) && <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" />{c.city}{c.state ? `, ${c.state}` : ""}</span>}
-          {c.phone && <span className="inline-flex items-center gap-1"><Phone className="h-3 w-3" />{c.phone}</span>}
-          {c.website && <span className="inline-flex items-center gap-1"><Globe className="h-3 w-3" />{c.website}</span>}
+          {(c.city || c.state) && (
+            <span className="inline-flex items-center gap-1">
+              <MapPin className="h-3 w-3" />
+              {c.city}
+              {c.state ? `, ${c.state}` : ""}
+            </span>
+          )}
+          {c.phone && (
+            <span className="inline-flex items-center gap-1">
+              <Phone className="h-3 w-3" />
+              {c.phone}
+            </span>
+          )}
+          {c.website && (
+            <span className="inline-flex items-center gap-1">
+              <Globe className="h-3 w-3" />
+              {c.website}
+            </span>
+          )}
           {c.sourceUrl && (
-            <a href={c.sourceUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
-               className="inline-flex items-center gap-1 hover:text-foreground">
+            <a
+              href={c.sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 hover:text-foreground"
+            >
               source <ExternalLink className="h-3 w-3" />
             </a>
           )}
