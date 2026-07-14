@@ -201,7 +201,16 @@ function Dashboard() {
     todayScheduled.sort((a, b) => a.sortKey - b.sortKey);
     items.push(...todayScheduled);
 
-    // 3) Hot untouched leads to fill up to cap. Prefer verified, higher confidence first.
+    // 3) Hot untouched leads to fill up to cap. Verified-tier leads always
+    // qualify; partial-tier leads qualify when Google Places itself vouches
+    // for the business (OPERATIONAL + real reviews + leadScore >= 70) —
+    // Firecrawl often can't identity-match exactly the no-website businesses
+    // that score highest, and Places data is stronger evidence than a failed
+    // scrape. Ranked by leadScore (opportunity), not just confidence.
+    const placesVouched = (l: Lead) =>
+      (l.leadScore ?? 0) >= 70 &&
+      l.verification?.business?.businessStatus === "OPERATIONAL" &&
+      (l.verification?.business?.reviewCount ?? 0) >= 1;
     const hotPool = searched
       .filter(
         (l) =>
@@ -210,12 +219,12 @@ function Dashboard() {
           l.status === "Not Called" &&
           !isValidContactDate(l.lastContacted) &&
           !l.unverified &&
-          (l.verificationTier ?? "partial") === "verified",
+          ((l.verificationTier ?? "partial") === "verified" || placesVouched(l)),
       )
       .sort((a, b) => {
-        const ac = a.confidenceScore ?? -1;
-        const bc = b.confidenceScore ?? -1;
-        if (ac !== bc) return bc - ac;
+        const as = a.leadScore ?? a.confidenceScore ?? -1;
+        const bs = b.leadScore ?? b.confidenceScore ?? -1;
+        if (as !== bs) return bs - as;
         return a.priority - b.priority;
       });
 
