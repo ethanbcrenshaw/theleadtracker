@@ -20,6 +20,7 @@ import { Botanical, BotanicalDivider } from "@/components/crm/Botanical";
 import { Wordmark } from "@/components/crm/Wordmark";
 import { BloomFlower } from "@/components/crm/BloomFlower";
 import { TodayView, type TodayItem } from "@/components/crm/TodayView";
+import { FollowUpView } from "@/components/crm/FollowUpView";
 import { DailyBriefing } from "@/components/crm/DailyBriefing";
 import { ReverifyButton } from "@/components/crm/ReverifyButton";
 import { AssistantPanel } from "@/components/crm/AssistantPanel";
@@ -30,9 +31,16 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "lead bloom — local business CRM" },
-      { name: "description", content: "A warm, editorial CRM for solo web designers and small agencies. Track, prioritize, and bloom your leads." },
+      {
+        name: "description",
+        content:
+          "A warm, editorial CRM for solo web designers and small agencies. Track, prioritize, and bloom your leads.",
+      },
       { property: "og:title", content: "lead bloom — local business CRM" },
-      { property: "og:description", content: "Track, prioritize, and bloom your local business leads." },
+      {
+        property: "og:description",
+        content: "Track, prioritize, and bloom your local business leads.",
+      },
     ],
     links: [],
   }),
@@ -60,7 +68,7 @@ function Dashboard() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const active = useMemo(
     () => (activeId ? (leads.find((l) => l.id === activeId) ?? null) : null),
-    [leads, activeId]
+    [leads, activeId],
   );
   const setActive = (l: Lead | null) => setActiveId(l ? l.id : null);
   const [aiOpen, setAiOpen] = useState(false);
@@ -72,10 +80,7 @@ function Dashboard() {
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const { presets, save: savePreset, remove: removePreset } = useSavedFilters();
 
-  const cities = useMemo(
-    () => Array.from(new Set(leads.map((l) => l.city))).sort(),
-    [leads]
-  );
+  const cities = useMemo(() => Array.from(new Set(leads.map((l) => l.city))).sort(), [leads]);
   const tags = useMemo(() => allTags(leads), [leads]);
 
   // Apply search by business or city only (per spec)
@@ -117,13 +122,9 @@ function Dashboard() {
     return [...searched]
       .filter(
         (l) =>
-          isValidContactDate(l.nextFollowUp) &&
-          new Date(l.nextFollowUp!).getTime() <= endOfToday
+          isValidContactDate(l.nextFollowUp) && new Date(l.nextFollowUp!).getTime() <= endOfToday,
       )
-      .sort(
-        (a, b) =>
-          new Date(a.nextFollowUp!).getTime() - new Date(b.nextFollowUp!).getTime()
-      );
+      .sort((a, b) => new Date(a.nextFollowUp!).getTime() - new Date(b.nextFollowUp!).getTime());
   }, [searched, endOfToday]);
 
   // "Pipeline": active outreach in progress. Sort by nextFollowUp asc, nulls last.
@@ -165,48 +166,15 @@ function Dashboard() {
     all: allFiltered.length,
   };
 
-  // TODAY — merged prioritized worklist
+  // TODAY — NEW-LEAD calls only (the hot, never-called pile). Follow-ups have
+  // their own desk now (the Follow-ups tab), so they're deliberately excluded
+  // here — the two worklists are separate in spirit.
   const todayItems = useMemo<TodayItem[]>(() => {
-    const now = Date.now();
-    const items: TodayItem[] = [];
-    const usedIds = new Set<string>();
-
-    // 1) Overdue follow-ups (most overdue first)
-    for (const l of searched) {
-      if (!isValidContactDate(l.nextFollowUp)) continue;
-      const t = new Date(l.nextFollowUp!).getTime();
-      if (t >= startOfToday) continue;
-      const days = Math.max(1, Math.ceil((now - t) / 86400000));
-      items.push({
-        lead: l,
-        reason: `OVERDUE — ${days} DAY${days === 1 ? "" : "S"}`,
-        tone: "overdue",
-        sortKey: -t, // most overdue = smallest t = largest -t
-      });
-      usedIds.add(l.id);
-    }
-    items.sort((a, b) => b.sortKey - a.sortKey);
-
-    // 2) Follow-ups / callbacks scheduled TODAY
-    const todayScheduled: TodayItem[] = [];
-    for (const l of searched) {
-      if (usedIds.has(l.id)) continue;
-      if (!isValidContactDate(l.nextFollowUp)) continue;
-      const t = new Date(l.nextFollowUp!).getTime();
-      if (t < startOfToday || t > endOfToday) continue;
-      const reason = l.status === "Callback Scheduled" ? "CALLBACK TODAY" : "FOLLOW-UP TODAY";
-      todayScheduled.push({ lead: l, reason, tone: "today", sortKey: t });
-      usedIds.add(l.id);
-    }
-    todayScheduled.sort((a, b) => a.sortKey - b.sortKey);
-    items.push(...todayScheduled);
-
-    // 3) Hot untouched leads to fill up to cap. Verified-tier leads always
-    // qualify; partial-tier leads qualify when Google Places itself vouches
-    // for the business (OPERATIONAL + real reviews + leadScore >= 70) —
-    // Firecrawl often can't identity-match exactly the no-website businesses
-    // that score highest, and Places data is stronger evidence than a failed
-    // scrape. Ranked by leadScore (opportunity), not just confidence.
+    // Verified-tier leads always qualify; partial-tier leads qualify when Google
+    // Places itself vouches for the business (OPERATIONAL + real reviews +
+    // leadScore >= 70) — Firecrawl often can't identity-match the no-website
+    // businesses that score highest, and Places data beats a failed scrape.
+    // Ranked by leadScore (opportunity), not just confidence.
     const placesVouched = (l: Lead) =>
       (l.leadScore ?? 0) >= 70 &&
       l.verification?.business?.businessStatus === "OPERATIONAL" &&
@@ -214,7 +182,6 @@ function Dashboard() {
     const hotPool = searched
       .filter(
         (l) =>
-          !usedIds.has(l.id) &&
           l.quality === "High" &&
           l.status === "Not Called" &&
           !isValidContactDate(l.lastContacted) &&
@@ -228,33 +195,24 @@ function Dashboard() {
         return a.priority - b.priority;
       });
 
-    for (const l of hotPool) {
-      if (items.length >= todayCap) break;
-      items.push({
-        lead: l,
-        reason: "HOT — NEVER CALLED",
-        tone: "hot",
-        sortKey: 0,
-      });
-      usedIds.add(l.id);
-    }
+    return hotPool.slice(0, todayCap).map((l) => ({
+      lead: l,
+      reason: "HOT — NEVER CALLED",
+      tone: "hot" as const,
+      sortKey: 0,
+    }));
+  }, [searched, todayCap]);
 
-    return items.slice(0, todayCap);
-  }, [searched, startOfToday, endOfToday, todayCap]);
-
-  // Counts used by DailyBriefing's stats block
+  // Follow-up counts drive the briefing stats and the TODAY banner.
   const overdueCount = useMemo(
-    () => todayItems.filter((i) => i.tone === "overdue").length,
-    [todayItems],
+    () => followupLeads.filter((l) => new Date(l.nextFollowUp!).getTime() < startOfToday).length,
+    [followupLeads, startOfToday],
   );
   const todayScheduledCount = useMemo(
-    () => todayItems.filter((i) => i.tone === "today").length,
-    [todayItems],
+    () => followupLeads.length - overdueCount,
+    [followupLeads.length, overdueCount],
   );
-  const hotFillCount = useMemo(
-    () => todayItems.filter((i) => i.tone === "hot").length,
-    [todayItems],
-  );
+  const hotFillCount = todayItems.length;
 
   function openAIGenerate(prefill?: { industry?: string; city?: string }) {
     setAiPrefill(prefill ?? {});
@@ -279,13 +237,14 @@ function Dashboard() {
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
   const toggleAll = () => {
     setSelected((prev) =>
-      tableLeads.every((l) => prev.has(l.id)) ? new Set() : new Set(tableLeads.map((l) => l.id))
+      tableLeads.every((l) => prev.has(l.id)) ? new Set() : new Set(tableLeads.map((l) => l.id)),
     );
   };
 
@@ -300,10 +259,19 @@ function Dashboard() {
               <Wordmark size={22} />
             </div>
             <div className="flex items-center gap-6">
-              <button onClick={() => setAssistantOpen(true)} className="mono ink-link">[ ASSISTANT ]</button>
-              <button onClick={() => setAiOpen(true)} className="mono ink-link">[ AI GENERATE ]</button>
-              <button onClick={() => exportCSV(allFiltered)} className="mono ink-link">[ EXPORT CSV ]</button>
-              <button onClick={() => setAddOpen(true)} className="mono px-3 py-1 bg-foreground text-background hover:opacity-90">
+              <button onClick={() => setAssistantOpen(true)} className="mono ink-link">
+                [ ASSISTANT ]
+              </button>
+              <button onClick={() => setAiOpen(true)} className="mono ink-link">
+                [ AI GENERATE ]
+              </button>
+              <button onClick={() => exportCSV(allFiltered)} className="mono ink-link">
+                [ EXPORT CSV ]
+              </button>
+              <button
+                onClick={() => setAddOpen(true)}
+                className="mono px-3 py-1 bg-foreground text-background hover:opacity-90"
+              >
                 [ ADD LEAD ]
               </button>
               <ThemeToggle />
@@ -323,18 +291,26 @@ function Dashboard() {
           <div
             aria-hidden
             className="pointer-events-none hidden md:block text-foreground"
-            style={{ position: "absolute", top: "0.5rem", bottom: "0.5rem", right: "3.5rem", width: "13rem" }}
+            style={{
+              position: "absolute",
+              top: "0.5rem",
+              bottom: "0.5rem",
+              right: "3.5rem",
+              width: "13rem",
+            }}
           >
             <BloomFlower className="h-full w-full" />
           </div>
-          <div className="relative mono text-muted-foreground">CRM — LOCAL BUSINESS OUTREACH — 2026</div>
+          <div className="relative mono text-muted-foreground">
+            CRM — LOCAL BUSINESS OUTREACH — 2026
+          </div>
           <div className="relative mt-6 grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-10 items-end">
             <h1 className="font-display font-normal lowercase tracking-tight leading-[0.95] text-[clamp(4rem,11vw,7rem)]">
               <span className="text-[color:var(--sienna)]">leads</span>
             </h1>
             <p className="text-muted-foreground max-w-sm lg:text-right leading-relaxed text-sm">
-              A working ledger for local businesses. Track, prioritize, and follow up on
-              the ones most likely to say yes. Start with the highest-opportunity entries.
+              A working ledger for local businesses. Track, prioritize, and follow up on the ones
+              most likely to say yes. Start with the highest-opportunity entries.
             </p>
           </div>
         </div>
@@ -364,12 +340,12 @@ function Dashboard() {
                     view === "today"
                       ? todayItems.length
                       : view === "hot"
-                      ? hotLeads.length
-                      : view === "followups"
-                        ? followupLeads.length
-                        : view === "pipeline"
-                          ? pipelineLeads.length
-                          : allFiltered.length,
+                        ? hotLeads.length
+                        : view === "followups"
+                          ? followupLeads.length
+                          : view === "pipeline"
+                            ? pipelineLeads.length
+                            : allFiltered.length,
                   ).padStart(3, "0")}
                 </span>{" "}
                 / {String(leads.length).padStart(3, "0")}
@@ -405,18 +381,36 @@ function Dashboard() {
                     onClick={() => setTodayCap((c) => Math.max(3, c - 1))}
                     className="mono ink-link px-1"
                     aria-label="Decrease cap"
-                  >[ − ]</button>
-                  <span className="text-foreground w-6 text-center">{String(todayCap).padStart(2, "0")}</span>
+                  >
+                    [ − ]
+                  </button>
+                  <span className="text-foreground w-6 text-center">
+                    {String(todayCap).padStart(2, "0")}
+                  </span>
                   <button
                     onClick={() => setTodayCap((c) => Math.min(50, c + 1))}
                     className="mono ink-link px-1"
                     aria-label="Increase cap"
-                  >[ + ]</button>
+                  >
+                    [ + ]
+                  </button>
                 </div>
               }
             />
             <div className="mono text-muted-foreground">{dateLine}</div>
           </div>
+        )}
+        {view === "today" && followupLeads.length > 0 && (
+          <button
+            onClick={() => setView("followups")}
+            className="w-full mono text-left border border-[color:var(--sienna)] text-[color:var(--sienna)] px-4 py-3 hover:bg-[color:var(--sienna)] hover:text-background transition-colors flex items-center justify-between gap-3"
+          >
+            <span>
+              ⚠ {String(followupLeads.length).padStart(2, "0")} FOLLOW-UP
+              {followupLeads.length === 1 ? "" : "S"} WAITING
+            </span>
+            <span>[ GO TO FOLLOW-UPS → ]</span>
+          </button>
         )}
         {view === "today" && (
           <DailyBriefing
@@ -436,21 +430,43 @@ function Dashboard() {
           </div>
         )}
         {view === "hot" && (
-          <SectionHead number="01" label="Hot, Not Called" italicTitle="the pile" count={hotLeads.length} corner />
+          <SectionHead
+            number="01"
+            label="Hot, Not Called"
+            italicTitle="the pile"
+            count={hotLeads.length}
+            corner
+          />
         )}
         {view === "followups" && (
-          <SectionHead number="01" label="Follow-ups Due" italicTitle="follow-ups" count={followupLeads.length} corner />
+          <SectionHead
+            number="01"
+            label="Follow-ups Due"
+            italicTitle="follow-ups"
+            count={followupLeads.length}
+            corner
+          />
         )}
         {view === "pipeline" && (
-          <SectionHead number="01" label="Pipeline" italicTitle="the pipeline" count={pipelineLeads.length} corner />
+          <SectionHead
+            number="01"
+            label="Pipeline"
+            italicTitle="the pipeline"
+            count={pipelineLeads.length}
+            corner
+          />
         )}
         {view === "all" && (
-          <SectionHead number="01" label="All Leads" italicTitle="the book" count={allFiltered.length} corner />
+          <SectionHead
+            number="01"
+            label="All Leads"
+            italicTitle="the book"
+            count={allFiltered.length}
+            corner
+          />
         )}
 
-        {view === "today" && (
-          <TodayView items={todayItems} onStartCall={setCallLead} />
-        )}
+        {view === "today" && <TodayView items={todayItems} onStartCall={setCallLead} />}
         {view === "hot" && (
           <QueueView
             leads={hotLeads}
@@ -461,13 +477,7 @@ function Dashboard() {
           />
         )}
         {view === "followups" && (
-          <QueueView
-            leads={followupLeads}
-            presorted
-            title="Follow-ups due"
-            emptyMessage="— no follow-ups due today — you're caught up —"
-            onStartCall={setCallLead}
-          />
+          <FollowUpView leads={followupLeads} onView={setActive} onCall={setCallLead} />
         )}
         {view === "pipeline" && (
           <QueueView
@@ -501,25 +511,32 @@ function Dashboard() {
 
       <LeadDetail lead={active} onClose={() => setActive(null)} onStartCall={setCallLead} />
       <CallAssistant lead={callLead} onClose={() => setCallLead(null)} />
-        <AIGenerateModal
-          open={aiOpen}
-          onClose={() => {
-            setAiOpen(false);
-            setAiPrefill({});
-          }}
-          initialIndustry={aiPrefill.industry}
-          initialCity={aiPrefill.city}
-        />
+      <AIGenerateModal
+        open={aiOpen}
+        onClose={() => {
+          setAiOpen(false);
+          setAiPrefill({});
+        }}
+        initialIndustry={aiPrefill.industry}
+        initialCity={aiPrefill.city}
+      />
       <AddLeadSheet open={addOpen} onOpenChange={setAddOpen} />
       <AssistantPanel open={assistantOpen} onClose={() => setAssistantOpen(false)} />
       <BulkBar
         count={selected.size}
         onClear={() => setSelected(new Set())}
-        onStatus={(s) => { bulkSetStatus(Array.from(selected), s); setSelected(new Set()); }}
-        onDelete={() => { bulkDelete(Array.from(selected)); setSelected(new Set()); }}
-        onExport={() => { exportCSV(leads.filter((l) => selected.has(l.id))); }}
+        onStatus={(s) => {
+          bulkSetStatus(Array.from(selected), s);
+          setSelected(new Set());
+        }}
+        onDelete={() => {
+          bulkDelete(Array.from(selected));
+          setSelected(new Set());
+        }}
+        onExport={() => {
+          exportCSV(leads.filter((l) => selected.has(l.id)));
+        }}
       />
     </div>
   );
 }
-

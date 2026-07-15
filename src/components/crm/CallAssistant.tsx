@@ -2,6 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CallRecord, CallScript, Lead, LeadStatus } from "@/lib/types";
 import { useLeads } from "@/lib/store";
 import { STATUSES } from "@/lib/crm-utils";
+import {
+  getTranscriptionProvider,
+  type TranscriptionSession,
+  type TranscriptSegment,
+} from "@/lib/transcription";
 
 interface Props {
   lead: Lead | null;
@@ -22,10 +27,25 @@ type Updates = {
   onlinePresenceNotes: string;
   nextAction: string;
   opportunitySummary: string;
+  contactName: string | null;
+  contactRole: string | null;
+  followUpReason: string | null;
 };
 
-type Stage = "prep" | "processing" | "confirm";
+type Stage = "prep" | "live" | "processing" | "confirm";
 type Source = "notes" | "transcript";
+
+const MIN_TRANSCRIPT_CHARS = 40;
+
+function fmtElapsed(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function fmtClock(at: number): string {
+  return new Date(at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
 
 export function CallAssistant({ lead, onClose }: Props) {
   const updateLead = useLeads((s) => s.updateLead);
@@ -57,9 +77,35 @@ export function CallAssistant({ lead, onClose }: Props) {
   const [scriptError, setScriptError] = useState<string | null>(null);
   const scriptFetchedForRef = useRef<string | null>(null);
 
+  // ── Live-call transcription state ──────────────────────────────────────────
+  const [segments, setSegments] = useState<TranscriptSegment[]>([]);
+  const [interim, setInterim] = useState("");
+  const [micState, setMicState] = useState<"listening" | "paused" | "stopped">("stopped");
+  const [transcriptionError, setTranscriptionError] = useState<{
+    message: string;
+    fatal: boolean;
+  } | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+  const [scriptCollapsed, setScriptCollapsed] = useState(false);
+  const sessionRef = useRef<TranscriptionSession | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pausedRef = useRef(false);
+  const segmentsRef = useRef<TranscriptSegment[]>([]);
+  const interimRef = useRef("");
+
+  function stopLive() {
+    sessionRef.current?.stop();
+    sessionRef.current = null;
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }
+
   // Reset when lead changes
   useEffect(() => {
     if (!lead) return;
+    stopLive();
     setStage("prep");
     setNotes("");
     setSource("notes");
@@ -68,12 +114,26 @@ export function CallAssistant({ lead, onClose }: Props) {
     setScriptError(null);
     setScript(lead.callScript ?? null);
     scriptFetchedForRef.current = lead.id;
+    setSegments([]);
+    segmentsRef.current = [];
+    setInterim("");
+    interimRef.current = "";
+    setMicState("stopped");
+    setTranscriptionError(null);
+    setElapsed(0);
+    setScriptCollapsed(false);
+    pausedRef.current = false;
     // Auto-generate script if enrichment exists but no script yet
     if (!lead.callScript && lead.enrichment) {
       void generateScript(lead, false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead?.id]);
+
+  // Stop transcription if the panel unmounts mid-call.
+  useEffect(() => {
+    return () => stopLive();
+  }, []);
 
   const enrichmentStale = useMemo(() => {
     if (!script?.enrichedAt) return false;
@@ -116,11 +176,103 @@ export function CallAssistant({ lead, onClose }: Props) {
     }
   }
 
-  async function summarize() {
+  // ── Live call control ──────────────────────────────────────────────────────
+  async function startListening() {
     if (!lead) return;
-    const text = notes.trim();
-    if (text.length < 10) {
+    setError(null);
+    const provider = getTranscriptionProvider();
+    if (!provider) {
+      setError("Live transcription needs Chrome or Edge. Type your notes below instead.");
+      return;
+    }
+    setSegments([]);
+    segmentsRef.current = [];
+    setInterim("");
+    interimRef.current = "";
+    setTranscriptionError(null);
+    setElapsed(0);
+    setScriptCollapsed(false);
+    pausedRef.current = false;
+    setStage("live");
+    try {
+      const session = await provider.start({
+        onSegment: (s) => {
+          segmentsRef.current = [...segmentsRef.current, s];
+          setSegments(segmentsRef.current);
+          interimRef.current = "";
+          setInterim("");
+        },
+        onInterim: (text) => {
+          interimRef.current = text;
+          setInterim(text);
+        },
+        onError: (e) => {
+          setTranscriptionError({ message: e.message, fatal: e.fatal });
+          if (e.fatal) {
+            stopLive();
+            setMicState("stopped");
+          }
+        },
+        onStateChange: (st) => setMicState(st),
+      });
+      sessionRef.current = session;
+      timerRef.current = setInterval(() => {
+        if (!pausedRef.current) setElapsed((e) => e + 1);
+      }, 1000);
+    } catch (e) {
+      // Mic denied or provider failed to start — fall back to typed notes.
+      setStage("prep");
+      setError(e instanceof Error ? e.message : "Could not start transcription.");
+    }
+  }
+
+  function pauseListening() {
+    pausedRef.current = true;
+    sessionRef.current?.pause();
+  }
+  function resumeListening() {
+    pausedRef.current = false;
+    sessionRef.current?.resume();
+  }
+
+  function buildTranscript(): string {
+    const finalText = segmentsRef.current.map((s) => s.text).join(" ");
+    const tail = interimRef.current.trim();
+    return (tail ? `${finalText} ${tail}` : finalText).trim();
+  }
+
+  function endCall() {
+    stopLive();
+    setMicState("stopped");
+    const transcript = buildTranscript();
+    setNotes(transcript);
+    setSource("transcript");
+    if (transcript.length < MIN_TRANSCRIPT_CHARS) {
+      // Too little captured — likely a botched recording. Preserve what we have
+      // in the notes box and let them type or retry.
+      setStage("prep");
+      setError("Not much was captured. Review or type the notes, then structure the outcome.");
+      return;
+    }
+    void runSummarize(transcript, "transcript");
+  }
+
+  // From a fatal mid-call error: keep the transcript, drop into typed notes.
+  function continueTyping() {
+    stopLive();
+    setMicState("stopped");
+    const transcript = buildTranscript();
+    setNotes(transcript);
+    setSource("notes");
+    setStage("prep");
+  }
+
+  async function runSummarize(text: string, src: Source) {
+    if (!lead) return;
+    const trimmed = text.trim();
+    if (trimmed.length < 10) {
       setError("Add at least a sentence of notes before summarizing.");
+      setStage("prep");
       return;
     }
     setStage("processing");
@@ -130,23 +282,38 @@ export function CallAssistant({ lead, onClose }: Props) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          transcript: text,
+          transcript: trimmed,
           lead: {
             business: lead.business,
             city: lead.city,
             state: lead.state,
             websiteOpportunity: lead.websiteOpportunity,
           },
-          callSignals: { source },
+          callSignals: { source: src, elapsedSeconds: elapsed || undefined },
         }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error ?? `Failed (${res.status})`);
+      const u = data.updates as Partial<Updates>;
       setUpdates({
-        ...data.updates,
-        suggestedStatus: (STATUSES as readonly string[]).includes(data.updates.suggestedStatus)
-          ? data.updates.suggestedStatus
+        summary: u.summary ?? "",
+        outcome: u.outcome ?? "",
+        answered: !!u.answered,
+        interested: !!u.interested,
+        suggestedStatus: (STATUSES as readonly string[]).includes(u.suggestedStatus as string)
+          ? (u.suggestedStatus as LeadStatus)
           : lead.status,
+        followUpDate: u.followUpDate ?? null,
+        zoomBooked: !!u.zoomBooked,
+        zoomDate: u.zoomDate ?? null,
+        objections: u.objections ?? [],
+        websitePainPoints: u.websitePainPoints ?? [],
+        onlinePresenceNotes: u.onlinePresenceNotes ?? "",
+        nextAction: u.nextAction ?? "",
+        opportunitySummary: u.opportunitySummary ?? "",
+        contactName: u.contactName ?? null,
+        contactRole: u.contactRole ?? null,
+        followUpReason: u.followUpReason ?? null,
       });
       setStage("confirm");
     } catch (e) {
@@ -155,8 +322,13 @@ export function CallAssistant({ lead, onClose }: Props) {
     }
   }
 
+  function summarizeNotes() {
+    void runSummarize(notes, source);
+  }
+
   function confirmAndSave() {
     if (!lead || !updates) return;
+    const contactName = updates.contactName?.trim() || undefined;
     const record: CallRecord = {
       id: crypto.randomUUID(),
       leadId: lead.id,
@@ -176,16 +348,27 @@ export function CallAssistant({ lead, onClose }: Props) {
       onlinePresenceNotes: updates.onlinePresenceNotes,
       nextAction: updates.nextAction,
       opportunitySummary: updates.opportunitySummary,
+      contactName,
+      contactRole: updates.contactRole?.trim() || undefined,
+      followUpReason: updates.followUpReason?.trim() || undefined,
     };
     addCallRecord(lead.id, record);
     setStatus(lead.id, updates.suggestedStatus, updates.summary);
-    updateLead(lead.id, {
-      nextFollowUp: updates.followUpDate ? new Date(updates.followUpDate).toISOString() : lead.nextFollowUp,
+    const leadPatch: Partial<Lead> = {
+      nextFollowUp: updates.followUpDate
+        ? new Date(updates.followUpDate).toISOString()
+        : lead.nextFollowUp,
       zoomBooked: updates.zoomBooked,
       zoomDate: updates.zoomDate ?? undefined,
       aiSummary: updates.summary,
       aiNextAction: updates.nextAction,
-    });
+    };
+    // Capture who we spoke to onto the lead if we don't already know an owner.
+    if (contactName && !lead.owner?.trim()) {
+      leadPatch.owner = contactName;
+      leadPatch.ownerSource = "call";
+    }
+    updateLead(lead.id, leadPatch);
     addNote(lead.id, `📞 ${updates.outcome}\n${updates.summary}\nNext: ${updates.nextAction}`);
     onClose();
   }
@@ -194,21 +377,23 @@ export function CallAssistant({ lead, onClose }: Props) {
 
   return (
     <>
-      <div
-        className="fixed inset-0 bg-foreground/30 z-[60]"
-        onClick={onClose}
-      />
+      <div className="fixed inset-0 bg-foreground/30 z-[60]" onClick={onClose} />
       <aside className="fixed right-0 top-0 bottom-0 w-full sm:w-[640px] bg-background border-l border-border z-[61] overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 z-10 bg-background border-b border-border px-6 py-4 flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="mono text-muted-foreground">— CALL ASSISTANT —</div>
-            <div className="font-display text-2xl text-foreground mt-1 truncate">{lead.business}</div>
+            <div className="font-display text-2xl text-foreground mt-1 truncate">
+              {lead.business}
+            </div>
             <div className="mono text-muted-foreground mt-1 truncate">
-              {lead.city}, {lead.state}{lead.phone ? ` — ${lead.phone}` : ""}
+              {lead.city}, {lead.state}
+              {lead.phone ? ` — ${lead.phone}` : ""}
             </div>
           </div>
-          <button onClick={onClose} className="mono ink-link shrink-0">[ CLOSE ]</button>
+          <button onClick={onClose} className="mono ink-link shrink-0">
+            [ CLOSE ]
+          </button>
         </div>
 
         <div className="px-6 py-6 space-y-8">
@@ -218,130 +403,105 @@ export function CallAssistant({ lead, onClose }: Props) {
             </div>
           )}
 
-          {/* SECTION: SCRIPT */}
-          <section className="space-y-3">
-            <div className="flex items-baseline justify-between border-b border-border pb-2">
-              <div className="mono text-foreground">— PRE-CALL SCRIPT —</div>
-              <div className="flex items-center gap-4">
-                {enrichmentStale && (
-                  <span className="mono text-[color:var(--sienna)]">STALE</span>
-                )}
-                <button
-                  onClick={() => generateScript(lead, true)}
-                  disabled={scriptLoading}
-                  className="mono ink-link disabled:opacity-50"
-                >
-                  {scriptLoading
-                    ? "[ WRITING… ]"
-                    : script
-                      ? "[ REGENERATE ]"
-                      : "[ GENERATE SCRIPT ]"}
-                </button>
-              </div>
-            </div>
-
-            {scriptError && (
-              <div className="mono text-[color:var(--sienna)]">⚠ {scriptError}</div>
-            )}
-
-            {!script && !scriptLoading && !scriptError && (
-              <div className="mono text-muted-foreground py-6 text-center border border-dashed border-border">
-                — no script yet —
-                {!lead.enrichment && <div className="mt-2">RESEARCH THIS LEAD FIRST FOR A TAILORED SCRIPT</div>}
-              </div>
-            )}
-
-            {scriptLoading && !script && (
-              <div className="mono text-muted-foreground py-6 text-center border border-dashed border-border">
-                — drafting a tailored script —
-              </div>
-            )}
-
-            {script && (
-              <div className="space-y-5">
-                <ScriptBlock label="OPENER" body={script.opener} />
-                <ScriptBlock label="PITCH ANGLE" body={script.pitchAngle} accent />
-                <div>
-                  <div className="mono text-muted-foreground mb-2">DISCOVERY</div>
-                  <ol className="space-y-2">
-                    {script.discovery.map((q, i) => (
-                      <li key={i} className="flex gap-3">
-                        <span className="mono text-muted-foreground shrink-0">{String(i + 1).padStart(2, "0")}</span>
-                        <p className="font-serif text-foreground leading-snug">{q}</p>
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-                <div>
-                  <div className="mono text-muted-foreground mb-2">LIKELY OBJECTIONS</div>
-                  <div className="divide-y divide-border border-y border-border">
-                    {script.objections.map((o, i) => (
-                      <div key={i} className="py-3">
-                        <div className="mono text-foreground">→ {o.objection}</div>
-                        <p className="font-serif text-foreground mt-1 leading-snug">{o.response}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </section>
+          {/* SECTION: SCRIPT — hidden while confirming; collapsible while live */}
+          {stage !== "confirm" && (
+            <ScriptSection
+              lead={lead}
+              script={script}
+              scriptLoading={scriptLoading}
+              scriptError={scriptError}
+              enrichmentStale={enrichmentStale}
+              onGenerate={() => generateScript(lead, true)}
+              collapsible={stage === "live"}
+              collapsed={scriptCollapsed}
+              onToggleCollapsed={() => setScriptCollapsed((c) => !c)}
+            />
+          )}
 
           {stage === "prep" && (
-            <>
-              {/* SECTION: NOTES */}
-              <section className="space-y-3">
-                <div className="flex items-baseline justify-between border-b border-border pb-2">
-                  <div className="mono text-foreground">— CALL NOTES —</div>
-                  <div className="flex items-center gap-3">
-                    <SourceToggle source={source} setSource={setSource} />
-                  </div>
-                </div>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Type or paste rough notes from the call — who you spoke to, what they said, objections, next step…"
-                  rows={10}
-                  className="w-full bg-transparent border border-border p-3 mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground resize-y"
-                  style={{ fontSize: "12px", lineHeight: 1.55 }}
-                />
-                <div className="flex items-center justify-end gap-4">
-                  <button onClick={onClose} className="mono ink-link">[ CANCEL ]</button>
+            <section className="space-y-3">
+              <div className="flex items-baseline justify-between border-b border-border pb-2">
+                <div className="mono text-foreground">— CALL NOTES —</div>
+                <SourceToggle source={source} setSource={setSource} />
+              </div>
+
+              {/* Live-call launcher */}
+              <button
+                onClick={startListening}
+                className="w-full mono px-4 py-3 border border-[color:var(--sienna)] text-[color:var(--sienna)] hover:bg-[color:var(--sienna)] hover:text-background transition-colors flex items-center justify-center gap-2"
+              >
+                <span className="text-lg leading-none">●</span> START LISTENING — LIVE CALL
+              </button>
+              <p className="mono text-muted-foreground text-center">
+                Transcribes both sides on speakerphone. Or type notes below.
+              </p>
+
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Type or paste rough notes from the call — who you spoke to, what they said, objections, next step…"
+                rows={10}
+                className="w-full bg-transparent border border-border p-3 mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground resize-y"
+                style={{ fontSize: "12px", lineHeight: 1.55 }}
+              />
+              <div className="flex items-center justify-end gap-4">
+                <button onClick={onClose} className="mono ink-link">
+                  [ CANCEL ]
+                </button>
+                <button
+                  onClick={summarizeNotes}
+                  disabled={notes.trim().length < 10}
+                  className="mono px-4 py-2 bg-foreground text-background disabled:opacity-40"
+                >
+                  [ STRUCTURE OUTCOME ]
+                </button>
+              </div>
+              <div className="mt-4 border-t border-border pt-3">
+                <div className="mono text-muted-foreground mb-2">— BAD DATA —</div>
+                <p className="mono text-muted-foreground mb-2">
+                  Flag this lead as unverified and drop it from TODAY.
+                </p>
+                <div className="flex flex-wrap gap-2">
                   <button
-                    onClick={summarize}
-                    disabled={notes.trim().length < 10}
-                    className="mono px-4 py-2 bg-foreground text-background disabled:opacity-40"
+                    onClick={() => flagBadData("wrong number")}
+                    className="mono border border-[color:var(--sienna)] text-[color:var(--sienna)] px-2 py-1 hover:bg-[color:var(--sienna)] hover:text-background"
                   >
-                    [ STRUCTURE OUTCOME ]
+                    [ WRONG NUMBER ]
+                  </button>
+                  <button
+                    onClick={() => flagBadData("business closed")}
+                    className="mono border border-[color:var(--sienna)] text-[color:var(--sienna)] px-2 py-1 hover:bg-[color:var(--sienna)] hover:text-background"
+                  >
+                    [ BUSINESS CLOSED ]
+                  </button>
+                  <button
+                    onClick={() => flagBadData("no such business")}
+                    className="mono border border-[color:var(--sienna)] text-[color:var(--sienna)] px-2 py-1 hover:bg-[color:var(--sienna)] hover:text-background"
+                  >
+                    [ NO SUCH BUSINESS ]
                   </button>
                 </div>
-                <div className="mt-4 border-t border-border pt-3">
-                  <div className="mono text-muted-foreground mb-2">— BAD DATA —</div>
-                  <p className="mono text-muted-foreground mb-2">
-                    Flag this lead as unverified and drop it from TODAY.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => flagBadData("wrong number")}
-                      className="mono border border-[color:var(--sienna)] text-[color:var(--sienna)] px-2 py-1 hover:bg-[color:var(--sienna)] hover:text-background"
-                    >[ WRONG NUMBER ]</button>
-                    <button
-                      onClick={() => flagBadData("business closed")}
-                      className="mono border border-[color:var(--sienna)] text-[color:var(--sienna)] px-2 py-1 hover:bg-[color:var(--sienna)] hover:text-background"
-                    >[ BUSINESS CLOSED ]</button>
-                    <button
-                      onClick={() => flagBadData("no such business")}
-                      className="mono border border-[color:var(--sienna)] text-[color:var(--sienna)] px-2 py-1 hover:bg-[color:var(--sienna)] hover:text-background"
-                    >[ NO SUCH BUSINESS ]</button>
-                  </div>
-                </div>
-              </section>
-            </>
+              </div>
+            </section>
+          )}
+
+          {stage === "live" && (
+            <LiveCall
+              segments={segments}
+              interim={interim}
+              micState={micState}
+              elapsed={elapsed}
+              transcriptionError={transcriptionError}
+              onPause={pauseListening}
+              onResume={resumeListening}
+              onEnd={endCall}
+              onContinueTyping={continueTyping}
+            />
           )}
 
           {stage === "processing" && (
             <div className="mono text-muted-foreground py-12 text-center border border-dashed border-border">
-              — reading notes · structuring outcome —
+              — reading the call · structuring outcome —
             </div>
           )}
 
@@ -357,6 +517,234 @@ export function CallAssistant({ lead, onClose }: Props) {
         </div>
       </aside>
     </>
+  );
+}
+
+function ScriptSection({
+  lead,
+  script,
+  scriptLoading,
+  scriptError,
+  enrichmentStale,
+  onGenerate,
+  collapsible,
+  collapsed,
+  onToggleCollapsed,
+}: {
+  lead: Lead;
+  script: CallScript | null;
+  scriptLoading: boolean;
+  scriptError: string | null;
+  enrichmentStale: boolean;
+  onGenerate: () => void;
+  collapsible: boolean;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="flex items-baseline justify-between border-b border-border pb-2">
+        <button
+          onClick={collapsible ? onToggleCollapsed : undefined}
+          className={`mono text-foreground ${collapsible ? "hover:opacity-70" : "cursor-default"}`}
+        >
+          — PRE-CALL SCRIPT — {collapsible && (collapsed ? "[ SHOW ]" : "[ HIDE ]")}
+        </button>
+        <div className="flex items-center gap-4">
+          {enrichmentStale && <span className="mono text-[color:var(--sienna)]">STALE</span>}
+          <button
+            onClick={onGenerate}
+            disabled={scriptLoading}
+            className="mono ink-link disabled:opacity-50"
+          >
+            {scriptLoading ? "[ WRITING… ]" : script ? "[ REGENERATE ]" : "[ GENERATE SCRIPT ]"}
+          </button>
+        </div>
+      </div>
+
+      {collapsible && collapsed ? null : (
+        <>
+          {scriptError && <div className="mono text-[color:var(--sienna)]">⚠ {scriptError}</div>}
+
+          {!script && !scriptLoading && !scriptError && (
+            <div className="mono text-muted-foreground py-6 text-center border border-dashed border-border">
+              — no script yet —
+              {!lead.enrichment && (
+                <div className="mt-2">RESEARCH THIS LEAD FIRST FOR A TAILORED SCRIPT</div>
+              )}
+            </div>
+          )}
+
+          {scriptLoading && !script && (
+            <div className="mono text-muted-foreground py-6 text-center border border-dashed border-border">
+              — drafting a tailored script —
+            </div>
+          )}
+
+          {script && (
+            <div className="space-y-5">
+              <ScriptBlock label="OPENER" body={script.opener} />
+              <ScriptBlock label="PITCH ANGLE" body={script.pitchAngle} accent />
+              <div>
+                <div className="mono text-muted-foreground mb-2">DISCOVERY</div>
+                <ol className="space-y-2">
+                  {script.discovery.map((q, i) => (
+                    <li key={i} className="flex gap-3">
+                      <span className="mono text-muted-foreground shrink-0">
+                        {String(i + 1).padStart(2, "0")}
+                      </span>
+                      <p className="font-serif text-foreground leading-snug">{q}</p>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+              <div>
+                <div className="mono text-muted-foreground mb-2">LIKELY OBJECTIONS</div>
+                <div className="divide-y divide-border border-y border-border">
+                  {script.objections.map((o, i) => (
+                    <div key={i} className="py-3">
+                      <div className="mono text-foreground">→ {o.objection}</div>
+                      <p className="font-serif text-foreground mt-1 leading-snug">{o.response}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+function LiveCall({
+  segments,
+  interim,
+  micState,
+  elapsed,
+  transcriptionError,
+  onPause,
+  onResume,
+  onEnd,
+  onContinueTyping,
+}: {
+  segments: TranscriptSegment[];
+  interim: string;
+  micState: "listening" | "paused" | "stopped";
+  elapsed: number;
+  transcriptionError: { message: string; fatal: boolean } | null;
+  onPause: () => void;
+  onResume: () => void;
+  onEnd: () => void;
+  onContinueTyping: () => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const pinnedRef = useRef(true);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el && pinnedRef.current) el.scrollTop = el.scrollHeight;
+  }, [segments, interim]);
+
+  function onScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+  }
+
+  const fatal = transcriptionError?.fatal;
+
+  return (
+    <section className="space-y-3">
+      {/* Sticky live control strip */}
+      <div className="sticky top-[89px] z-10 -mx-6 px-6 py-3 bg-background border-y border-border flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span
+            className={`mono flex items-center gap-1.5 ${
+              micState === "listening" ? "text-[color:var(--sienna)]" : "text-muted-foreground"
+            }`}
+          >
+            <span className={micState === "listening" ? "animate-pulse" : ""}>●</span>
+            {micState === "listening" ? "LIVE" : micState === "paused" ? "PAUSED" : "STOPPED"}
+          </span>
+          <span className="mono text-foreground tabular-nums">{fmtElapsed(elapsed)}</span>
+        </div>
+        <div className="flex items-center gap-3">
+          {!fatal &&
+            (micState === "paused" ? (
+              <button onClick={onResume} className="mono ink-link">
+                [ RESUME ]
+              </button>
+            ) : (
+              <button onClick={onPause} className="mono ink-link">
+                [ PAUSE ]
+              </button>
+            ))}
+          <button onClick={onEnd} className="mono px-3 py-1.5 bg-foreground text-background">
+            [ END CALL ]
+          </button>
+        </div>
+      </div>
+
+      <div className="mono text-muted-foreground text-center">
+        SPEAKERPHONE NEXT TO THE MIC — BOTH VOICES ARE CAPTURED
+      </div>
+
+      {transcriptionError && (
+        <div
+          className={`mono px-3 py-2 border ${
+            fatal
+              ? "text-[color:var(--sienna)] border-[color:var(--sienna)]"
+              : "text-muted-foreground border-border"
+          }`}
+        >
+          ⚠ {transcriptionError.message}
+          {fatal && (
+            <div className="mt-2">
+              Your transcript is safe below.{" "}
+              <button onClick={onContinueTyping} className="ink-link">
+                [ CONTINUE TYPING ]
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Transcript pane */}
+      <div
+        ref={scrollRef}
+        onScroll={onScroll}
+        className="border border-border p-4 max-h-[46vh] overflow-y-auto space-y-3"
+      >
+        {segments.length === 0 && !interim && (
+          <div className="mono text-muted-foreground text-center py-8">
+            — listening · start talking —
+          </div>
+        )}
+        {segments.map((s, i) => (
+          <div key={i} className="grid grid-cols-[3.5rem_1fr] gap-3">
+            <span className="mono text-muted-foreground pt-1">{fmtClock(s.at)}</span>
+            <p className="font-serif text-foreground leading-snug" style={{ fontSize: "1rem" }}>
+              {s.text}
+            </p>
+          </div>
+        ))}
+        {interim && (
+          <div className="grid grid-cols-[3.5rem_1fr] gap-3">
+            <span className="mono text-muted-foreground pt-1">···</span>
+            <p
+              className="font-serif text-muted-foreground italic leading-snug"
+              style={{ fontSize: "1rem" }}
+            >
+              {interim}
+            </p>
+          </div>
+        )}
+      </div>
+      <div className="mono text-muted-foreground text-right">
+        [ END CALL ] STOPS THE MIC AND STRUCTURES THE OUTCOME
+      </div>
+    </section>
   );
 }
 
@@ -414,12 +802,34 @@ function ConfirmPanel({
   const statusChanging = updates.suggestedStatus !== currentStatus;
   const positiveStatuses: LeadStatus[] = ["Zoom Booked", "Sold", "Callback Scheduled"];
   const isPositive = updates.interested || positiveStatuses.includes(updates.suggestedStatus);
+  const followUpMissingReason = !!updates.followUpDate && !updates.followUpReason?.trim();
 
   return (
     <section className="space-y-6">
       <div className="flex items-baseline justify-between border-b border-border pb-2">
         <div className="mono text-foreground">— STRUCTURED OUTCOME —</div>
         <div className="mono text-muted-foreground">CONFIRM TO APPLY</div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <Row label="SPOKE WITH">
+          <input
+            value={updates.contactName ?? ""}
+            onChange={(e) => set("contactName", e.target.value || null)}
+            placeholder="e.g. Mike"
+            className="w-full bg-transparent border border-border p-2 mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground"
+            style={{ fontSize: "12px" }}
+          />
+        </Row>
+        <Row label="THEIR ROLE">
+          <input
+            value={updates.contactRole ?? ""}
+            onChange={(e) => set("contactRole", e.target.value || null)}
+            placeholder="e.g. owner"
+            className="w-full bg-transparent border border-border p-2 mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground"
+            style={{ fontSize: "12px" }}
+          />
+        </Row>
       </div>
 
       <Row label="WHAT HAPPENED">
@@ -445,22 +855,38 @@ function ConfirmPanel({
         />
         <div className="flex flex-wrap gap-3 mt-2 mono text-muted-foreground">
           <label className="flex items-center gap-1.5">
-            <input type="checkbox" checked={updates.answered} onChange={(e) => set("answered", e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={updates.answered}
+              onChange={(e) => set("answered", e.target.checked)}
+            />
             ANSWERED
           </label>
           <label className="flex items-center gap-1.5">
-            <input type="checkbox" checked={updates.interested} onChange={(e) => set("interested", e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={updates.interested}
+              onChange={(e) => set("interested", e.target.checked)}
+            />
             INTERESTED
           </label>
           <label className="flex items-center gap-1.5">
-            <input type="checkbox" checked={updates.zoomBooked} onChange={(e) => set("zoomBooked", e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={updates.zoomBooked}
+              onChange={(e) => set("zoomBooked", e.target.checked)}
+            />
             ZOOM BOOKED
           </label>
         </div>
       </Row>
 
       <Row label="OBJECTIONS">
-        <ListEditor items={updates.objections} onChange={(v) => set("objections", v)} placeholder="e.g. Too expensive" />
+        <ListEditor
+          items={updates.objections}
+          onChange={(v) => set("objections", v)}
+          placeholder="e.g. Too expensive"
+        />
       </Row>
 
       <Row label="NEXT ACTION">
@@ -484,33 +910,61 @@ function ConfirmPanel({
         </Row>
         <Row
           label={
-            <span className={statusChanging ? "text-[color:var(--sienna)]" : ""}>
-              NEW STATUS {statusChanging ? "(CHANGING)" : ""}
+            <span className={followUpMissingReason ? "text-[color:var(--sienna)]" : ""}>
+              WHY THIS FOLLOW-UP {followUpMissingReason ? "(ADD ONE)" : ""}
             </span>
           }
         >
-          <select
-            value={updates.suggestedStatus}
-            onChange={(e) => set("suggestedStatus", e.target.value as LeadStatus)}
+          <input
+            value={updates.followUpReason ?? ""}
+            onChange={(e) => set("followUpReason", e.target.value || null)}
+            placeholder="e.g. wants pricing after Aug"
             className={`w-full bg-transparent border p-2 mono focus:outline-none focus:border-foreground ${
-              statusChanging ? "border-[color:var(--sienna)] text-[color:var(--sienna)]" : "border-border text-foreground"
+              followUpMissingReason
+                ? "border-[color:var(--sienna)] text-foreground"
+                : "border-border text-foreground"
             }`}
             style={{ fontSize: "12px" }}
-          >
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-          <div className="mono text-muted-foreground mt-1">CURRENT: {currentStatus.toUpperCase()}</div>
+          />
         </Row>
       </div>
+
+      <Row
+        label={
+          <span className={statusChanging ? "text-[color:var(--sienna)]" : ""}>
+            NEW STATUS {statusChanging ? "(CHANGING)" : ""}
+          </span>
+        }
+      >
+        <select
+          value={updates.suggestedStatus}
+          onChange={(e) => set("suggestedStatus", e.target.value as LeadStatus)}
+          className={`w-full bg-transparent border p-2 mono focus:outline-none focus:border-foreground ${
+            statusChanging
+              ? "border-[color:var(--sienna)] text-[color:var(--sienna)]"
+              : "border-border text-foreground"
+          }`}
+          style={{ fontSize: "12px" }}
+        >
+          {STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+        <div className="mono text-muted-foreground mt-1">
+          CURRENT: {currentStatus.toUpperCase()}
+        </div>
+      </Row>
 
       {updates.zoomBooked && (
         <Row label="ZOOM DATE / TIME">
           <input
             type="datetime-local"
             value={updates.zoomDate ? updates.zoomDate.slice(0, 16) : ""}
-            onChange={(e) => set("zoomDate", e.target.value ? new Date(e.target.value).toISOString() : null)}
+            onChange={(e) =>
+              set("zoomDate", e.target.value ? new Date(e.target.value).toISOString() : null)
+            }
             className="w-full bg-transparent border border-border p-2 mono text-foreground focus:outline-none focus:border-foreground"
             style={{ fontSize: "12px" }}
           />
@@ -518,11 +972,10 @@ function ConfirmPanel({
       )}
 
       <div className="sticky bottom-0 -mx-6 px-6 py-4 bg-background border-t border-border flex items-center justify-end gap-4">
-        <button onClick={onBack} className="mono ink-link">[ ← EDIT NOTES ]</button>
-        <button
-          onClick={onConfirm}
-          className="mono px-4 py-2 bg-foreground text-background"
-        >
+        <button onClick={onBack} className="mono ink-link">
+          [ ← EDIT NOTES ]
+        </button>
+        <button onClick={onConfirm} className="mono px-4 py-2 bg-foreground text-background">
           [ CONFIRM & APPLY ]
         </button>
       </div>
@@ -572,10 +1025,7 @@ function ListEditor({
           </button>
         </div>
       ))}
-      <button
-        onClick={() => onChange([...items, ""])}
-        className="mono ink-link"
-      >
+      <button onClick={() => onChange([...items, ""])} className="mono ink-link">
         [ + ADD ]
       </button>
     </div>

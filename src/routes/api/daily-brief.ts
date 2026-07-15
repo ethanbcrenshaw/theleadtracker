@@ -76,7 +76,8 @@ function briefingUserPrompt(s: BriefingInput["stats"]) {
   return [
     `Weekday: ${s.weekday}`,
     `Total leads in book: ${s.total}`,
-    `Queued for today: ${s.queuedToday} (overdue ${s.overdue}, scheduled today ${s.todayScheduled}, hot uncalled fill ${s.hotUncalled})`,
+    `New-lead calls queued for today (hot, never-called): ${s.queuedToday}`,
+    `Follow-ups waiting on their own desk: ${s.overdue + s.todayScheduled} (${s.overdue} overdue, ${s.todayScheduled} due today)`,
     `Currently in pipeline (called / callback / zoom): ${s.inPipeline}`,
     `Zoom booked all-time: ${s.zoomBooked} — Sold: ${s.sold}`,
     `Calls logged yesterday: ${s.contactedYesterday}`,

@@ -93,6 +93,12 @@ export interface CallRecord {
   opportunitySummary: string;
   /** Where the raw text originated. Future-proofs live transcription. */
   source?: "notes" | "transcript";
+  /** Who was actually spoken to on the call — e.g. "Mike". */
+  contactName?: string;
+  /** Their role — e.g. "owner", "manager". */
+  contactRole?: string;
+  /** One plain sentence for WHY a follow-up exists (drives the Follow-Ups desk). */
+  followUpReason?: string;
 }
 
 export interface CallScriptObjection {
