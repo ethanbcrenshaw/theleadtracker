@@ -38,6 +38,7 @@ export interface PlacesSignals {
   rating?: number;
   reviewCount?: number;
   lastReviewAt?: string; // ISO — most recent review publishTime when available
+  utcOffsetMinutes?: number; // exact business UTC offset from Places (incl. DST at fetch)
 }
 
 function hostOf(u: string): string | null {
@@ -289,6 +290,7 @@ export async function runVerificationChecks(
       rating: input.signals?.rating,
       reviewCount: input.signals?.reviewCount,
       lastReviewAt: input.signals?.lastReviewAt,
+      utcOffsetMinutes: input.signals?.utcOffsetMinutes,
     },
     checkedAt: new Date().toISOString(),
   };

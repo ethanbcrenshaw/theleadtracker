@@ -25,6 +25,9 @@ import { DailyBriefing } from "@/components/crm/DailyBriefing";
 import { ReverifyButton } from "@/components/crm/ReverifyButton";
 import { AssistantPanel } from "@/components/crm/AssistantPanel";
 import { SectionHead } from "@/components/crm/SectionHead";
+import { SchedulePlanner } from "@/components/crm/SchedulePlanner";
+import { plannablePool, todaysSlots, orderForMoment, type CallSchedule } from "@/lib/planner";
+import { leadZone, ZONE_LABEL } from "@/lib/timezone";
 import type { Lead } from "@/lib/types";
 
 export const Route = createFileRoute("/")({
@@ -75,6 +78,7 @@ function Dashboard() {
   const [aiPrefill, setAiPrefill] = useState<{ industry?: string; city?: string }>({});
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [callLead, setCallLead] = useState<Lead | null>(null);
+  const [schedule, setSchedule] = useState<CallSchedule | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [addOpen, setAddOpen] = useState(false);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
@@ -167,41 +171,36 @@ function Dashboard() {
   };
 
   // TODAY — NEW-LEAD calls only (the hot, never-called pile). Follow-ups have
-  // their own desk now (the Follow-ups tab), so they're deliberately excluded
-  // here — the two worklists are separate in spirit.
+  // their own desk (the Follow-ups tab). Pool gating lives in plannablePool
+  // (verified tier, or Places-vouched partials). When a calling slot is
+  // scheduled today, the queue sizes itself to the slot's capacity and orders
+  // leads by which timezones are answerable during the slot, East → West;
+  // otherwise it falls back to the manual cap ordered by answerability now.
   const todayItems = useMemo<TodayItem[]>(() => {
-    // Verified-tier leads always qualify; partial-tier leads qualify when Google
-    // Places itself vouches for the business (OPERATIONAL + real reviews +
-    // leadScore >= 70) — Firecrawl often can't identity-match the no-website
-    // businesses that score highest, and Places data beats a failed scrape.
-    // Ranked by leadScore (opportunity), not just confidence.
-    const placesVouched = (l: Lead) =>
-      (l.leadScore ?? 0) >= 70 &&
-      l.verification?.business?.businessStatus === "OPERATIONAL" &&
-      (l.verification?.business?.reviewCount ?? 0) >= 1;
-    const hotPool = searched
-      .filter(
-        (l) =>
-          l.quality === "High" &&
-          l.status === "Not Called" &&
-          !isValidContactDate(l.lastContacted) &&
-          !l.unverified &&
-          ((l.verificationTier ?? "partial") === "verified" || placesVouched(l)),
-      )
-      .sort((a, b) => {
-        const as = a.leadScore ?? a.confidenceScore ?? -1;
-        const bs = b.leadScore ?? b.confidenceScore ?? -1;
-        if (as !== bs) return bs - as;
-        return a.priority - b.priority;
-      });
-
-    return hotPool.slice(0, todayCap).map((l) => ({
+    const pool = plannablePool(searched);
+    const slots = todaysSlots(schedule, new Date());
+    let ordered: Lead[];
+    let cap: number;
+    if (slots.length) {
+      const now = new Date();
+      const current =
+        slots.find((s) => now >= s.start && now < s.end) ??
+        slots.find((s) => s.start > now) ??
+        slots[slots.length - 1];
+      const from = now > current.start && now < current.end ? now : current.start;
+      ordered = orderForMoment(pool, from, current.end);
+      cap = slots.reduce((sum, s) => sum + s.capacity, 0);
+    } else {
+      ordered = orderForMoment(pool, new Date());
+      cap = todayCap;
+    }
+    return ordered.slice(0, cap).map((l) => ({
       lead: l,
-      reason: "HOT — NEVER CALLED",
+      reason: `HOT — ${ZONE_LABEL[leadZone(l)]}`,
       tone: "hot" as const,
       sortKey: 0,
     }));
-  }, [searched, todayCap]);
+  }, [searched, todayCap, schedule]);
 
   // Follow-up counts drive the briefing stats and the TODAY banner.
   const overdueCount = useMemo(
@@ -227,9 +226,13 @@ function Dashboard() {
     const month = d.toLocaleDateString(undefined, { month: "long" }).toUpperCase();
     const day = d.getDate();
     const n = todayItems.length;
-    const noun = n === 1 ? "CALL" : "CALLS";
-    return `${weekday} — ${month} ${day} — ${String(n).padStart(2, "0")} ${noun} QUEUED`;
-  }, [todayItems.length]);
+    const noun = n === 1 ? "DIAL" : "DIALS";
+    const slots = todaysSlots(schedule, d);
+    const slotText = slots.length
+      ? ` — SLOT ${slots.map((s) => `${s.slot.start}–${s.slot.end}`).join(" & ")}`
+      : "";
+    return `${weekday} — ${month} ${day}${slotText} — ${String(n).padStart(2, "0")} ${noun} ${slots.length ? "PLANNED" : "QUEUED"}`;
+  }, [todayItems.length, schedule]);
 
   // What's used by bulk actions (only meaningful in the "all" table view).
   const tableLeads = allFiltered;
@@ -411,6 +414,13 @@ function Dashboard() {
             </span>
             <span>[ GO TO FOLLOW-UPS → ]</span>
           </button>
+        )}
+        {view === "today" && (
+          <SchedulePlanner
+            leads={leads}
+            onSchedule={setSchedule}
+            onOpenAIGenerate={openAIGenerate}
+          />
         )}
         {view === "today" && (
           <DailyBriefing

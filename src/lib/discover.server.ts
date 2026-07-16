@@ -17,6 +17,7 @@ const FIELD_MASK = [
   "places.rating",
   "places.userRatingCount",
   "places.reviews",
+  "places.utcOffsetMinutes",
   "nextPageToken",
 ].join(",");
 
@@ -31,6 +32,7 @@ type Place = {
   rating?: number;
   userRatingCount?: number;
   reviews?: Array<{ publishTime?: string }>;
+  utcOffsetMinutes?: number;
 };
 type PlacesResponse = { places?: Place[]; nextPageToken?: string; error?: { message?: string } };
 
@@ -95,6 +97,7 @@ export function signalsFromPlace(p: Place): PlacesSignals {
     rating: p.rating,
     reviewCount: p.userRatingCount,
     lastReviewAt: reviewTimes.length ? reviewTimes[reviewTimes.length - 1] : undefined,
+    utcOffsetMinutes: p.utcOffsetMinutes,
   };
 }
 

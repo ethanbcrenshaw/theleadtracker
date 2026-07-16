@@ -141,6 +141,7 @@ export interface LeadVerification {
     rating?: number;
     reviewCount?: number;
     lastReviewAt?: string; // ISO — most recent review, when available
+    utcOffsetMinutes?: number; // exact UTC offset from Places, minutes
   };
   checkedAt: string; // ISO
 }

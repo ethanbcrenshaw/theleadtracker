@@ -12,6 +12,15 @@ import {
   type AIToolCall,
   type AIToolDef,
 } from "@/lib/ai.server";
+import {
+  computeWeekPlan,
+  mondayOf,
+  SCHEDULE_KEY,
+  DEFAULT_MINUTES_PER_CALL,
+  type CallSchedule,
+} from "@/lib/planner";
+import { getSettingServer, setSettingServer } from "@/lib/settings.server";
+import type { Lead } from "@/lib/types";
 
 const MAX_STEPS = 6;
 const BULK_CONFIRM_THRESHOLD = 5;
@@ -185,6 +194,45 @@ const TOOLS = [
           },
         },
       },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "set_call_schedule",
+      description:
+        "Save the user's weekly cold-calling schedule (their sit-down slots). Use when they describe when they'll call this week, e.g. 'Tuesday 1-3pm and Thursday mornings'. Times are the user's local time, 24h HH:MM. Confirms capacity back.",
+      parameters: {
+        type: "object",
+        properties: {
+          slots: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                day: { type: "string", enum: ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"] },
+                start: { type: "string", description: "24h HH:MM, e.g. '13:00'" },
+                end: { type: "string", description: "24h HH:MM, e.g. '15:00'" },
+              },
+              required: ["day", "start", "end"],
+            },
+          },
+          minutes_per_call: {
+            type: "number",
+            description: "Minutes per dial incl. logging. Default 5.",
+          },
+        },
+        required: ["slots"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_call_plan",
+      description:
+        "Compute this week's calling plan from the saved schedule and the lead book: per-slot capacity, which US timezones are in their answer window during each slot, callable stock per zone, and stock gaps that need new leads. Use to build the daily plan or decide what to generate.",
+      parameters: { type: "object", properties: {} },
     },
   },
   {
@@ -669,6 +717,109 @@ async function executeTool(
     };
   }
 
+  if (name === "set_call_schedule") {
+    const DAY_INDEX: Record<string, number> = {
+      SUN: 0,
+      MON: 1,
+      TUE: 2,
+      WED: 3,
+      THU: 4,
+      FRI: 5,
+      SAT: 6,
+    };
+    const rawSlots = Array.isArray(args.slots) ? (args.slots as Array<Record<string, string>>) : [];
+    const slots = rawSlots
+      .map((s) => ({
+        day:
+          DAY_INDEX[
+            String(s.day || "")
+              .toUpperCase()
+              .slice(0, 3)
+          ] ?? -1,
+        start: String(s.start || "").trim(),
+        end: String(s.end || "").trim(),
+      }))
+      .filter(
+        (s) => s.day >= 0 && /^\d{1,2}:\d{2}$/.test(s.start) && /^\d{1,2}:\d{2}$/.test(s.end),
+      );
+    if (!slots.length) {
+      return {
+        result: { error: "No valid slots — need day + start + end (24h HH:MM)." },
+        label: "→ set schedule",
+        summary: "no valid slots",
+      };
+    }
+    const schedule: CallSchedule = {
+      slots,
+      minutesPerCall: Math.max(
+        2,
+        Math.min(30, Number(args.minutes_per_call) || DEFAULT_MINUTES_PER_CALL),
+      ),
+      weekOf: mondayOf(new Date()),
+    };
+    await setSettingServer(SCHEDULE_KEY, schedule);
+    const { data: rows } = await sb.from("leads").select("*").is("deleted_at", null);
+    const plan = computeWeekPlan((rows ?? []) as unknown as Lead[], schedule);
+    return {
+      result: {
+        saved: true,
+        totalCapacity: plan.totalCapacity,
+        slots: plan.slots.map((p) => ({
+          day: p.slot.day,
+          start: p.slot.start,
+          end: p.slot.end,
+          capacity: p.capacity,
+          bestZones: p.zones.slice(0, 3).map((z) => z.label),
+          shortfall: p.shortfall,
+        })),
+        gaps: plan.gaps,
+      },
+      label: `→ saving schedule (${slots.length} slot${slots.length === 1 ? "" : "s"})`,
+      summary: `saved — ${plan.totalCapacity} dials of capacity this week${plan.gaps.length ? `, gaps: ${plan.gaps.map((g) => `${g.needed} ${g.label}`).join(", ")}` : ""}`,
+    };
+  }
+
+  if (name === "get_call_plan") {
+    const schedule = await getSettingServer<CallSchedule>(SCHEDULE_KEY);
+    if (!schedule || !schedule.slots.length) {
+      return {
+        result: {
+          noSchedule: true,
+          message: "No calling schedule saved. Ask the user for their sit-down slots this week.",
+        },
+        label: "→ reading call plan",
+        summary: "no schedule saved",
+      };
+    }
+    const { data: rows } = await sb.from("leads").select("*").is("deleted_at", null);
+    const plan = computeWeekPlan((rows ?? []) as unknown as Lead[], schedule);
+    const stale = schedule.weekOf !== mondayOf(new Date());
+    return {
+      result: {
+        weekOf: plan.weekOf,
+        staleSchedule: stale,
+        minutesPerCall: schedule.minutesPerCall,
+        totalCapacity: plan.totalCapacity,
+        slots: plan.slots.map((p) => ({
+          day: p.slot.day,
+          start: p.slot.start,
+          end: p.slot.end,
+          capacity: p.capacity,
+          zones: p.zones.map((z) => ({
+            zone: z.label,
+            answerability: z.answerability,
+            stock: z.stock,
+          })),
+          callableStock: p.callableStock,
+          shortfall: p.shortfall,
+        })),
+        gaps: plan.gaps,
+      },
+      label: "→ computing week plan",
+      summary: `${plan.totalCapacity} dials planned across ${plan.slots.length} slot${plan.slots.length === 1 ? "" : "s"}${plan.gaps.length ? ` — need ${plan.gaps.reduce((s, g) => s + g.needed, 0)} more leads` : " — fully stocked"}`,
+    };
+  }
+
   return { result: { error: `unknown tool ${name}` }, label: `→ ${name}`, summary: "unknown tool" };
 }
 
@@ -715,6 +866,13 @@ Rules:
 - delete_leads and bulk update_leads (>5) return a confirmation card — do not describe the deletion as done. Say something like "I've queued the delete — confirm below."
 - market_research is web research, NOT verified lead data. Call out that distinction.
 - If a tool errors, say so plainly — do not pretend it worked.
+
+You are also the user's calling-week planner:
+- When the user describes when they'll sit down to cold call (days/times), call set_call_schedule. Times are their local time; convert casual phrasing ("Thursday mornings" → 09:00–11:30).
+- Use get_call_plan to answer "what's my plan", "how many calls can I do", or to build a daily plan. It returns per-slot capacity, which US timezones are answerable during each slot, stock per zone, and gaps.
+- If get_call_plan reports staleSchedule or noSchedule, ask ONE short question for this week's slots before planning.
+- When the plan shows gaps, proactively offer to fill them with generate_leads — pick the user's best-converting segment and a specific city IN THE NEEDED TIMEZONE (e.g. Central gap → Memphis or Nashville TN; Eastern gap → Knoxville or Chattanooga TN). Say why you chose that city. Never auto-import beyond capacity needs.
+- Timezone golden windows: businesses answer best 9:00–11:30am and 1:30–4:30pm THEIR local time; avoid lunch and after 5pm. East coast first when multiple zones are open.
 - Today: ${new Date().toISOString().slice(0, 10)}.`;
 
 async function llmCall(messages: ChatMsg[], ai: AIConfig) {
