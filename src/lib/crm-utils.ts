@@ -102,14 +102,38 @@ export function pitchAngle(lead: Lead): string {
 
 export function exportCSV(leads: Lead[]) {
   const headers = [
-    "Priority","Business","City","State","Phone","Online Presence","Website Opportunity",
-    "Quality","Status","Sources","Last Contacted","Next Follow-Up","Notes","Tags","Owner",
+    "Priority",
+    "Business",
+    "City",
+    "State",
+    "Phone",
+    "Online Presence",
+    "Website Opportunity",
+    "Quality",
+    "Status",
+    "Sources",
+    "Last Contacted",
+    "Next Follow-Up",
+    "Notes",
+    "Tags",
+    "Owner",
   ];
   const rows = leads.map((l) => [
-    l.priority, l.business, l.city, l.state, l.phone, l.onlinePresence,
-    l.websiteOpportunity, l.quality, l.status, l.sources.join("; "),
-    l.lastContacted ?? "", l.nextFollowUp ?? "", l.notes.replace(/\n/g, " "),
-    l.tags.join("; "), l.ownerNote ?? "",
+    l.priority,
+    l.business,
+    l.city,
+    l.state,
+    l.phone,
+    l.onlinePresence,
+    l.websiteOpportunity,
+    l.quality,
+    l.status,
+    l.sources.join("; "),
+    l.lastContacted ?? "",
+    l.nextFollowUp ?? "",
+    l.notes.replace(/\n/g, " "),
+    l.tags.join("; "),
+    l.ownerNote ?? "",
   ]);
   const escape = (v: unknown) => {
     const s = String(v ?? "");
@@ -136,6 +160,110 @@ export function isValidContactDate(iso?: string): boolean {
   if (!iso) return false;
   const d = new Date(iso);
   return !isNaN(d.getTime()) && d.getFullYear() >= 2000;
+}
+
+const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+const MONTHS = [
+  "january",
+  "february",
+  "march",
+  "april",
+  "may",
+  "june",
+  "july",
+  "august",
+  "september",
+  "october",
+  "november",
+  "december",
+];
+
+function toISODate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * Parse a follow-up date the way a person or an LLM would phrase it, into a
+ * clean ISO `yyyy-mm-dd` string. Returns null when nothing sensible can be
+ * derived — callers must NOT persist an unparseable value (that's how a
+ * follow-up silently disappears from every date-filtered view).
+ *
+ * Handles: real ISO dates, "today/tomorrow", "in N days/weeks/months",
+ * "next week/month", weekday names ("monday", "next friday"), month names
+ * ("august", "end of august"), and anything the JS Date parser accepts.
+ */
+export function parseFollowUpDate(input: unknown, now = new Date()): string | null {
+  if (input == null) return null;
+  const raw = String(input).trim();
+  if (!raw) return null;
+  const s = raw.toLowerCase();
+
+  // Already an ISO date/datetime — take the date part if it's real.
+  const isoMatch = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (isoMatch) {
+    const d = new Date(isoMatch[1] + "T00:00:00");
+    return !isNaN(d.getTime()) && d.getFullYear() >= 2000 ? isoMatch[1] : null;
+  }
+
+  const base = new Date(now);
+  base.setHours(0, 0, 0, 0);
+
+  if (s === "today") return toISODate(base);
+  if (s === "tomorrow") {
+    base.setDate(base.getDate() + 1);
+    return toISODate(base);
+  }
+
+  // "in N day(s)/week(s)/month(s)"
+  const rel = s.match(/in\s+(\d+)\s*(day|week|month)s?/);
+  if (rel) {
+    const n = Number(rel[1]);
+    if (rel[2] === "day") base.setDate(base.getDate() + n);
+    else if (rel[2] === "week") base.setDate(base.getDate() + n * 7);
+    else base.setMonth(base.getMonth() + n);
+    return toISODate(base);
+  }
+  if (s === "next week") {
+    base.setDate(base.getDate() + 7);
+    return toISODate(base);
+  }
+  if (s === "next month") {
+    base.setMonth(base.getMonth() + 1);
+    return toISODate(base);
+  }
+
+  // Weekday, optionally prefixed "next" — next occurrence of that weekday.
+  const wd = s.match(/(next\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)/);
+  if (wd) {
+    const target = WEEKDAYS.indexOf(wd[2]);
+    let delta = (target - base.getDay() + 7) % 7;
+    if (delta === 0) delta = 7; // "monday" today → next monday, not today
+    if (wd[1] && delta <= 7) delta += 0; // "next monday" — the upcoming one is fine
+    base.setDate(base.getDate() + delta);
+    return toISODate(base);
+  }
+
+  // Month name ("august", "end of august", "mid august") — best-effort day.
+  const mo = s.match(
+    /(end of|late|mid|early|beginning of)?\s*(january|february|march|april|may|june|july|august|september|october|november|december)/,
+  );
+  if (mo) {
+    const m = MONTHS.indexOf(mo[2]);
+    let year = base.getFullYear();
+    // If that month has already passed this year, assume next year.
+    if (m < base.getMonth()) year += 1;
+    const qualifier = mo[1] || "";
+    let day = 1;
+    if (/end|late/.test(qualifier)) day = new Date(year, m + 1, 0).getDate();
+    else if (/mid/.test(qualifier)) day = 15;
+    else if (!qualifier) day = 1;
+    return toISODate(new Date(year, m, day));
+  }
+
+  // Last resort: let the JS Date parser try.
+  const d = new Date(raw);
+  if (!isNaN(d.getTime()) && d.getFullYear() >= 2000) return toISODate(d);
+  return null;
 }
 
 export function relativeFollowUp(nextFollowUp?: string, lastContacted?: string) {
@@ -166,12 +294,12 @@ export function sourceLinks(lead: Lead): SourceLink[] {
   const cityState = encodeURIComponent(`${lead.city}, ${lead.state}`);
 
   const map: Record<LeadSource, { label: string; url: string; domain: string }> = {
-    "Facebook": {
+    Facebook: {
       label: "Facebook Page",
       url: `https://www.facebook.com/search/pages/?q=${qOnly}`,
       domain: "facebook.com",
     },
-    "Yelp": {
+    Yelp: {
       label: "Yelp Listing",
       url: `https://www.yelp.com/search?find_desc=${qOnly}&find_loc=${cityState}`,
       domain: "yelp.com",
@@ -181,17 +309,17 @@ export function sourceLinks(lead: Lead): SourceLink[] {
       url: `https://www.google.com/maps/search/?api=1&query=${q}`,
       domain: "google.com/maps",
     },
-    "Instagram": {
+    Instagram: {
       label: "Instagram",
       url: `https://www.google.com/search?q=site%3Ainstagram.com+${qOnly}`,
       domain: "instagram.com",
     },
-    "Houzz": {
+    Houzz: {
       label: "Houzz Profile",
       url: `https://www.houzz.com/professionals/query/${qOnly}`,
       domain: "houzz.com",
     },
-    "MapQuest": {
+    MapQuest: {
       label: "MapQuest Listing",
       url: `https://www.mapquest.com/search/results?query=${q}`,
       domain: "mapquest.com",
@@ -201,17 +329,17 @@ export function sourceLinks(lead: Lead): SourceLink[] {
       url: `https://www.angi.com/companylist/search.htm?searchTerm=${qOnly}&zip=${encodeURIComponent(lead.city)}`,
       domain: "angi.com",
     },
-    "Website": {
+    Website: {
       label: "Their Website",
       url: `https://www.google.com/search?q=${q}+official+site`,
       domain: "google search",
     },
-    "Directory": {
+    Directory: {
       label: "Directory Listings",
       url: `https://www.google.com/search?q=${q}+upholstery`,
       domain: "google search",
     },
-    "Other": {
+    Other: {
       label: "Web Mentions",
       url: `https://www.google.com/search?q=${q}`,
       domain: "google search",

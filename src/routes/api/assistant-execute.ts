@@ -23,9 +23,14 @@ export const Route = createFileRoute("/api/assistant-execute")({
     handlers: {
       POST: async ({ request }) => {
         let body: Body;
-        try { body = await request.json(); } catch { return Response.json({ error: "Bad JSON" }, { status: 400 }); }
+        try {
+          body = await request.json();
+        } catch {
+          return Response.json({ error: "Bad JSON" }, { status: 400 });
+        }
         const { action, typedConfirmation } = body;
-        if (!action || !Array.isArray(action.ids)) return Response.json({ error: "action required" }, { status: 400 });
+        if (!action || !Array.isArray(action.ids))
+          return Response.json({ error: "action required" }, { status: 400 });
 
         const sb = makeSb();
 
@@ -44,11 +49,27 @@ export const Route = createFileRoute("/api/assistant-execute")({
           if (!action.ids.length) return Response.json({ ok: true, count: 0 });
           const changes = action.changes || {};
           const addTag = typeof changes.addTag === "string" ? changes.addTag : null;
+          const status = typeof changes.status === "string" ? (changes.status as string) : null;
+          // Non-status/non-tag fields (e.g. an already-ISO nextFollowUp) apply flat.
           const patch: Record<string, unknown> = {};
-          for (const [k, v] of Object.entries(changes)) if (k !== "addTag") patch[k] = v;
+          for (const [k, v] of Object.entries(changes)) {
+            if (k !== "addTag" && k !== "status") patch[k] = v;
+          }
           if (Object.keys(patch).length) {
             const { error } = await sb.from("leads").update(patch).in("id", action.ids);
             if (error) return Response.json({ error: error.message }, { status: 500 });
+          }
+          // A status change must append history + stamp lastContacted, matching
+          // the UI and MCP paths — otherwise the change is missing from the
+          // lead's timeline and "last contacted" is wrong.
+          if (status) {
+            const now = new Date().toISOString();
+            const { data: rows } = await sb.from("leads").select("id,history").in("id", action.ids);
+            for (const r of (rows ?? []) as Array<{ id: string; history: unknown[] | null }>) {
+              const history = Array.isArray(r.history) ? r.history : [];
+              history.push({ id: crypto.randomUUID(), date: now, status });
+              await sb.from("leads").update({ status, lastContacted: now, history }).eq("id", r.id);
+            }
           }
           if (addTag) {
             const { data: rows } = await sb.from("leads").select("id,tags").in("id", action.ids);

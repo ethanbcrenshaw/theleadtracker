@@ -20,10 +20,53 @@ import {
   type CallSchedule,
 } from "@/lib/planner";
 import { getSettingServer, setSettingServer } from "@/lib/settings.server";
-import type { Lead } from "@/lib/types";
+import { parseFollowUpDate } from "@/lib/crm-utils";
+import type { Lead, LeadStatus } from "@/lib/types";
 
-const MAX_STEPS = 6;
+const MAX_STEPS = 10;
 const BULK_CONFIRM_THRESHOLD = 5;
+
+// Places-vouched: a partial-tier lead Google Places itself stands behind
+// (operational, real reviews, strong opportunity score). The Today queue and
+// the batch importer already trust these, so the assistant does too — otherwise
+// it imports far fewer good no-website prospects than the rest of the app.
+function placesVouched(
+  enr: {
+    verificationTier?: string;
+    leadScore?: number;
+  },
+  checks: {
+    leadScore?: number;
+    verification?: { business?: { businessStatus?: string; reviewCount?: number } };
+  } | null,
+): boolean {
+  const score = checks?.leadScore ?? enr.leadScore ?? 0;
+  const biz = checks?.verification?.business;
+  return (
+    enr.verificationTier === "partial" &&
+    score >= 70 &&
+    biz?.businessStatus === "OPERATIONAL" &&
+    (biz?.reviewCount ?? 0) >= 1
+  );
+}
+
+// Append a history entry + stamp lastContacted when status changes, matching
+// the UI (setStatus) and the MCP tool — so a status change via the assistant
+// isn't silently missing from the lead's timeline.
+async function applyStatusHistory(
+  sb: Sb,
+  ids: string[],
+  status: string,
+  note?: string,
+): Promise<void> {
+  const now = new Date().toISOString();
+  const { data: rows } = await sb.from("leads").select("id, history").in("id", ids);
+  for (const r of (rows ?? []) as Array<{ id: string; history: unknown[] | null }>) {
+    const history = Array.isArray(r.history) ? r.history : [];
+    history.push({ id: crypto.randomUUID(), date: now, status, note });
+    await sb.from("leads").update({ status, lastContacted: now, history }).eq("id", r.id);
+  }
+}
 
 // ─── Tool schemas ────────────────────────────────────────────────────────────
 const TOOLS = [
@@ -71,13 +114,13 @@ const TOOLS = [
     function: {
       name: "generate_leads",
       description:
-        "Discover + verify new local business leads via Google Places + Firecrawl. Imports ONLY verified leads by default. Slow (30-90s per lead). Use small counts (3-10).",
+        "Discover + verify new local business leads via Google Places + Firecrawl. Imports verified leads AND Places-vouched partials (operational business, real reviews, strong score) — the same bar the rest of the app trusts. Slow; capped at 8 per call so it finishes reliably. For bigger batches, tell the user to use the [ AI GENERATE ] button instead.",
       parameters: {
         type: "object",
         properties: {
           industry: { type: "string" },
           city: { type: "string", description: "e.g. 'Franklin, TN'" },
-          count: { type: "number", description: "3-15" },
+          count: { type: "number", description: "1-8 (capped at 8)" },
           type: {
             type: "string",
             enum: [
@@ -103,7 +146,7 @@ const TOOLS = [
     function: {
       name: "update_leads",
       description:
-        "Bulk update status / nextFollowUp / tags on filtered leads. If >5 leads match, returns a confirmation card (does NOT execute).",
+        "Bulk update status / nextFollowUp / tags on filtered leads. A status change logs history + last-contacted automatically. nextFollowUp accepts natural language ('next Monday', 'in 2 weeks', 'August') — it's normalized to a real date; if it can't be read, the result carries followUpWarning and the date is NOT saved. If >5 leads match, returns a confirmation card (does NOT execute until confirmed).",
       parameters: {
         type: "object",
         properties: {
@@ -424,7 +467,9 @@ async function executeTool(
       };
     const industry = String(args.industry);
     const city = String(args.city);
-    const count = Math.max(1, Math.min(15, Number(args.count) || 5));
+    // Cap conversational generation small so it finishes inside the serverless
+    // window; the [ AI GENERATE ] button handles big batches without this limit.
+    const count = Math.max(1, Math.min(8, Number(args.count) || 5));
     const type = String(args.type || "No Dedicated Website");
     const includePartial = Boolean(args.include_partial);
     const label = `→ generating ${count} ${industry} leads in ${city}…`;
@@ -483,10 +528,14 @@ async function executeTool(
       }
     });
 
+    // Import verified leads, Places-vouched partials (the standard the Today
+    // queue and batch importer already trust), and — only if explicitly asked —
+    // any remaining partials.
     const toImport = enriched.filter(
-      ({ enr }) =>
+      ({ enr, checks }) =>
         enr &&
         (enr.verificationTier === "verified" ||
+          placesVouched(enr, checks) ||
           (includePartial && enr.verificationTier === "partial")),
     );
     let basePriority = 0;
@@ -547,12 +596,14 @@ async function executeTool(
     const verifiedN = enriched.filter((e) => e.enr?.verificationTier === "verified").length;
     const partialN = enriched.filter((e) => e.enr?.verificationTier === "partial").length;
     const unverifiedN = enriched.filter((e) => e.enr?.verificationTier === "unverified").length;
+    const vouchedN = enriched.filter((e) => e.enr && placesVouched(e.enr, e.checks)).length;
     const failedN = enriched.filter((e) => !e.enr).length;
-    const summary = `discovered ${candidates.length}, deduped to ${filtered.length}, verified ${verifiedN} · partial ${partialN} · unverified ${unverifiedN}${failedN ? ` · errors ${failedN}` : ""} — imported ${rows.length}`;
+    const summary = `discovered ${candidates.length}, deduped to ${filtered.length}, verified ${verifiedN}${vouchedN ? ` + ${vouchedN} Places-vouched` : ""} · partial ${partialN} · unverified ${unverifiedN}${failedN ? ` · errors ${failedN}` : ""} — imported ${rows.length}`;
     return {
       result: {
         imported: rows.length,
         verified: verifiedN,
+        placesVouched: vouchedN,
         partial: partialN,
         unverified: unverifiedN,
         errors: failedN,
@@ -653,29 +704,60 @@ async function executeTool(
     const changes = (args.changes as Record<string, unknown>) || {};
     const rows = await fetchLeads(sb, filter);
     const ids = rows.map((r) => r.id);
-    const patch: Record<string, unknown> = {};
-    if (typeof changes.status === "string") patch.status = changes.status;
-    if (typeof changes.nextFollowUp === "string") patch.nextFollowUp = changes.nextFollowUp;
-    const addTag = typeof changes.addTag === "string" ? changes.addTag : null;
     const label = `→ updating ${ids.length} lead${ids.length === 1 ? "" : "s"}`;
+
+    // Normalize a follow-up date to real ISO. If it's given but unparseable,
+    // DO NOT write it (that silently loses the follow-up) — report it back so
+    // the assistant can ask the user to clarify.
+    const statusChange = typeof changes.status === "string" ? (changes.status as string) : null;
+    const addTag = typeof changes.addTag === "string" ? changes.addTag : null;
+    let followUpISO: string | undefined;
+    let followUpWarning: string | undefined;
+    if (changes.nextFollowUp != null && String(changes.nextFollowUp).trim()) {
+      const parsed = parseFollowUpDate(changes.nextFollowUp);
+      if (parsed) followUpISO = new Date(parsed + "T12:00:00").toISOString();
+      else
+        followUpWarning = `Could not read the follow-up date "${changes.nextFollowUp}" — ask the user for a concrete date.`;
+    }
+
+    // The non-status patch (follow-up) can be applied in one shot; status needs
+    // per-row history, handled separately.
+    const flatPatch: Record<string, unknown> = {};
+    if (followUpISO) flatPatch.nextFollowUp = followUpISO;
+
+    const previewParts = [
+      statusChange ? `status=${statusChange}` : null,
+      followUpISO ? `follow-up=${followUpISO.slice(0, 10)}` : null,
+      addTag ? `+tag ${addTag}` : null,
+    ].filter(Boolean);
+
     if (ids.length > BULK_CONFIRM_THRESHOLD) {
-      const preview = `Update ${ids.length} lead(s) matching ${describeFilter(filter)} — set ${JSON.stringify({ ...patch, ...(addTag ? { addTag } : {}) })}`;
+      const preview = `Update ${ids.length} lead(s) matching ${describeFilter(filter)} — ${previewParts.join(", ") || "no changes"}.`;
       return {
-        result: { needsConfirmation: true, count: ids.length, preview },
+        result: { needsConfirmation: true, count: ids.length, preview, followUpWarning },
         label,
         summary: `awaiting confirmation for ${ids.length} updates`,
         pending: {
           kind: "update",
           ids,
-          changes: { ...patch, ...(addTag ? { addTag } : {}) },
+          changes: {
+            ...(statusChange ? { status: statusChange } : {}),
+            ...flatPatch,
+            ...(addTag ? { addTag } : {}),
+          },
           preview,
         },
       };
     }
-    if (!ids.length) return { result: { updated: 0 }, label, summary: "no leads matched" };
-    if (Object.keys(patch).length) {
-      const { error } = await sb.from("leads").update(patch).in("id", ids);
+    if (!ids.length)
+      return { result: { updated: 0, followUpWarning }, label, summary: "no leads matched" };
+
+    if (Object.keys(flatPatch).length) {
+      const { error } = await sb.from("leads").update(flatPatch).in("id", ids);
       if (error) return { result: { error: error.message }, label, summary: error.message };
+    }
+    if (statusChange) {
+      await applyStatusHistory(sb, ids, statusChange);
     }
     if (addTag) {
       for (const r of rows) {
@@ -683,7 +765,11 @@ async function executeTool(
         await sb.from("leads").update({ tags: nextTags }).eq("id", r.id);
       }
     }
-    return { result: { updated: ids.length }, label, summary: `updated ${ids.length}` };
+    return {
+      result: { updated: ids.length, followUpWarning },
+      label,
+      summary: `updated ${ids.length}${followUpWarning ? " (follow-up date unclear)" : ""}`,
+    };
   }
 
   if (name === "delete_leads") {
@@ -900,13 +986,14 @@ You operate the CRM via tools. Never invent lead data — everything you report 
 Voice: warm, editorial, concise. Use short paragraphs. No emoji. No headings. Mono/uppercase labels are fine when quoting counts.
 
 Rules:
+- Ground EVERY claim in a tool result. Never say you did something unless the tool result confirms it. If a tool returned an error, a zero count, or a warning field, report that plainly — do not smooth it over or claim success. Honesty about a failure is far better than a false "done".
 - Prefer query_leads to answer questions about the user's book. Report actual counts.
-- Use generate_leads for creating new leads. Explain verified/partial/unverified split honestly.
+- Use generate_leads for SMALL conversational batches (it caps at 8 so it finishes reliably). If the user wants more than ~8 at once, tell them to use the [ AI GENERATE ] button in the header — it handles big batches without timing out. It imports verified + Places-vouched leads by default; report the imported count and the split honestly, and if 0 imported, say so and suggest a different city/segment.
+- update_leads: follow-up dates can be natural language ("next Monday", "in 2 weeks", "August") — the tool normalizes them. If a tool result includes followUpWarning, the date could NOT be saved; tell the user and ask for a concrete date rather than claiming the follow-up is set.
 - reverify_leads for freshness passes. Summarize what changed.
-- delete_leads and bulk update_leads (>5) return a confirmation card — do not describe the deletion as done. Say something like "I've queued the delete — confirm below."
+- delete_leads and bulk update_leads (>5) return a confirmation card — do not describe the action as done. Say something like "I've queued it — confirm on the card below." Only after the user confirms does it execute.
 - To delete by exclusion ("delete everything except X", "keep only X", "delete all but the roofers"), call delete_leads with scope='all' and put the criteria to KEEP in the 'keep' object — never say you can't do this. Only ask for specifics if the "except" criteria itself is ambiguous.
 - market_research is web research, NOT verified lead data. Call out that distinction.
-- If a tool errors, say so plainly — do not pretend it worked.
 
 You are also the user's calling-week planner:
 - When the user describes when they'll sit down to cold call (days/times), call set_call_schedule. Times are their local time; convert casual phrasing ("Thursday mornings" → 09:00–11:30).
@@ -916,14 +1003,35 @@ You are also the user's calling-week planner:
 - Timezone golden windows: businesses answer best 9:00–11:30am and 1:30–4:30pm THEIR local time; avoid lunch and after 5pm. East coast first when multiple zones are open.
 - Today: ${new Date().toISOString().slice(0, 10)}.`;
 
+// Transient model errors (overload/rate-limit/5xx) should not kill the whole
+// request — the assistant would just surface a raw "529 Overloaded" as a
+// dead-end. Retry a couple of times with backoff before giving up.
+function isTransient(err: unknown): boolean {
+  const m = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return /\b(429|500|502|503|529)\b/.test(m) || /overload|rate.?limit|timeout|temporarily/.test(m);
+}
+
 async function llmCall(messages: ChatMsg[], ai: AIConfig) {
-  const { content, toolCalls } = await aiChat(ai, {
-    messages,
-    tools: TOOLS as unknown as AIToolDef[],
-    toolChoice: "auto",
-    timeoutMs: 60_000,
-  });
-  return { content, tool_calls: toolCalls };
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const { content, toolCalls } = await aiChat(ai, {
+        messages,
+        tools: TOOLS as unknown as AIToolDef[],
+        toolChoice: "auto",
+        timeoutMs: 60_000,
+      });
+      return { content, tool_calls: toolCalls };
+    } catch (err) {
+      lastErr = err;
+      if (attempt < 2 && isTransient(err)) {
+        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
 }
 
 export const Route = createFileRoute("/api/assistant")({
@@ -1027,7 +1135,14 @@ export const Route = createFileRoute("/api/assistant")({
               }
             }
           }
-          if (!finalReply) finalReply = "I hit my step budget. Try narrowing the request.";
+          if (!finalReply) {
+            // Out of steps but work was done — summarize honestly instead of a
+            // bare "I gave up." The steps array is returned so the UI shows it.
+            const okSteps = steps.filter((s) => s.type === "tool_result" && s.ok);
+            finalReply = okSteps.length
+              ? "That took more steps than I run in one go — here's what I got through above. Tell me the next piece and I'll continue."
+              : "I couldn't complete that in one pass. Try breaking it into a smaller, more specific request.";
+          }
 
           // Persist user + assistant turns.
           const lastUser = history[history.length - 1];
