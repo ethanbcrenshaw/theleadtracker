@@ -23,25 +23,41 @@ export interface AIConfig {
   model: string;
 }
 
+/**
+ * Strip anything that isn't a printable-ASCII key character. API keys are
+ * always plain ASCII (letters, digits, `-`/`_`), so this removes paste
+ * corruption — surrounding whitespace/newlines, a BOM, zero-width spaces,
+ * smart quotes, or an ellipsis accidentally copied from abbreviated text —
+ * without ever altering a valid key. Prevents fetch's "Cannot convert to
+ * ByteString" when the Authorization/x-api-key header is built.
+ */
+export function cleanKey(raw: string | undefined): string {
+  if (!raw) return "";
+  return raw.replace(/[^\x21-\x7E]/g, "");
+}
+
 export function getAI(): AIConfig | null {
-  if (process.env.ANTHROPIC_API_KEY) {
+  const anthropic = cleanKey(process.env.ANTHROPIC_API_KEY);
+  if (anthropic) {
     return {
       provider: "anthropic",
-      apiKey: process.env.ANTHROPIC_API_KEY,
+      apiKey: anthropic,
       model: process.env.ANTHROPIC_MODEL || "claude-opus-4-8",
     };
   }
-  if (process.env.GEMINI_API_KEY) {
+  const gemini = cleanKey(process.env.GEMINI_API_KEY);
+  if (gemini) {
     return {
       provider: "gemini",
-      apiKey: process.env.GEMINI_API_KEY,
+      apiKey: gemini,
       model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
     };
   }
-  if (process.env.LOVABLE_API_KEY) {
+  const lovable = cleanKey(process.env.LOVABLE_API_KEY);
+  if (lovable) {
     return {
       provider: "lovable",
-      apiKey: process.env.LOVABLE_API_KEY,
+      apiKey: lovable,
       model: process.env.LOVABLE_MODEL || "google/gemini-3-flash-preview",
     };
   }
