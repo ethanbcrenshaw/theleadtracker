@@ -161,15 +161,31 @@ const TOOLS = [
     function: {
       name: "delete_leads",
       description:
-        "Soft-delete filtered leads. NEVER auto-executes: always returns a confirmation card. If the user wants to scrap ALL leads, set scope='all' — the client will require a typed DELETE ALL confirmation.",
+        "Soft-delete leads. NEVER auto-executes: always returns a confirmation card. To DELETE BY EXCLUSION ('delete everything except…', 'keep only…', 'delete all but the roofers'), set scope='all' and put the criteria to SPARE in `keep` — everything not matching `keep` is deleted. To delete a matching subset, use scope='filtered' with `filter`. scope='all' with no keep scraps the whole book (client requires a typed DELETE ALL confirmation).",
       parameters: {
         type: "object",
         properties: {
           scope: { type: "string", enum: ["all", "unverified", "partial", "filtered"] },
           filter: {
             type: "object",
+            description:
+              "Leads MATCHING these criteria are deleted (inclusive). Use with scope='filtered'.",
             properties: {
               status: { type: "string" },
+              tier: { type: "string", enum: ["verified", "partial", "unverified"] },
+              quality: { type: "string", enum: ["High", "Medium", "Low"] },
+              city: { type: "string" },
+              industry_or_segment: { type: "string" },
+            },
+          },
+          keep: {
+            type: "object",
+            description:
+              "Leads MATCHING these criteria are SPARED; everything else in scope is deleted. This is how you delete by exclusion. e.g. keep={tier:'verified', industry_or_segment:'roofing'} deletes everything except verified roofers.",
+            properties: {
+              status: { type: "string" },
+              tier: { type: "string", enum: ["verified", "partial", "unverified"] },
+              quality: { type: "string", enum: ["High", "Medium", "Low"] },
               city: { type: "string" },
               industry_or_segment: { type: "string" },
             },
@@ -673,18 +689,42 @@ async function executeTool(
   if (name === "delete_leads") {
     const scope = String(args.scope);
     const filter = (args.filter as Record<string, string>) || {};
-    const rows = await fetchLeads(sb, scope === "filtered" ? filter : { scope, ...filter });
+    const keep = (args.keep as Record<string, string>) || {};
+    const hasKeep = Object.keys(keep).some((k) => keep[k]);
+    let rows = await fetchLeads(sb, scope === "filtered" ? filter : { scope, ...filter });
+
+    // Delete-by-exclusion: spare everything matching `keep`, delete the rest.
+    let keptCount = 0;
+    if (hasKeep) {
+      const keepRows = await fetchLeads(sb, keep);
+      const keepIds = new Set(keepRows.map((r) => r.id));
+      const before = rows.length;
+      rows = rows.filter((r) => !keepIds.has(r.id));
+      keptCount = before - rows.length;
+    }
+
     const ids = rows.map((r) => r.id);
     const label = `→ preparing delete (${ids.length} lead${ids.length === 1 ? "" : "s"})`;
-    const requireTyped = scope === "all";
-    const preview =
-      scope === "all"
+    // A "scrap everything" typed guard applies only to an unqualified scope=all.
+    const requireTyped = scope === "all" && !hasKeep;
+    const preview = hasKeep
+      ? `Delete ${ids.length} lead(s), KEEPING ${keptCount} that match ${describeFilter(keep)}.`
+      : scope === "all"
         ? `SCRAP EVERYTHING — this deletes all ${ids.length} lead(s) in the book.`
         : `Delete ${ids.length} ${scope} lead(s)${Object.keys(filter).length ? ` matching ${describeFilter(filter)}` : ""}.`;
     return {
-      result: { needsConfirmation: true, scope, count: ids.length, preview, requireTyped },
+      result: {
+        needsConfirmation: true,
+        scope,
+        count: ids.length,
+        kept: keptCount,
+        preview,
+        requireTyped,
+      },
       label,
-      summary: `awaiting confirmation to delete ${ids.length}`,
+      summary: hasKeep
+        ? `awaiting confirmation to delete ${ids.length} (keeping ${keptCount})`
+        : `awaiting confirmation to delete ${ids.length}`,
       pending: { kind: "delete", scope, filter, ids, requireTyped, preview },
     };
   }
@@ -864,6 +904,7 @@ Rules:
 - Use generate_leads for creating new leads. Explain verified/partial/unverified split honestly.
 - reverify_leads for freshness passes. Summarize what changed.
 - delete_leads and bulk update_leads (>5) return a confirmation card — do not describe the deletion as done. Say something like "I've queued the delete — confirm below."
+- To delete by exclusion ("delete everything except X", "keep only X", "delete all but the roofers"), call delete_leads with scope='all' and put the criteria to KEEP in the 'keep' object — never say you can't do this. Only ask for specifics if the "except" criteria itself is ambiguous.
 - market_research is web research, NOT verified lead data. Call out that distinction.
 - If a tool errors, say so plainly — do not pretend it worked.
 
