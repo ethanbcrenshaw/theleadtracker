@@ -108,7 +108,7 @@ async function aiExtractBusinesses(hits: Hit[], q: DiscoveryQuery): Promise<Extr
   try {
     const res = await aiExtract<{ businesses: Extracted[] }>(ai, {
       system:
-        "You extract individual local businesses from web search results (title, snippet, url). For each distinct business: its exact name, a phone number if one appears in the title/snippet, its city if evident, and the url of the hit it came from. Skip results that are not a specific local business (articles, category/list pages with no single business, government pages). Never invent phone numbers — only report digits present in the text.",
+        "You extract individual local businesses from web search results (title, snippet, url). For each distinct business: its exact name, a phone number if one appears in the title/snippet, its city if evident, and the url of the hit it came from. Skip results that are not a specific local business: articles, category/list pages with no single business, government pages, and discussion/recommendation threads (titles that are questions or requests are never business names). Never invent phone numbers — only report digits present in the text.",
       user: `Industry sought: ${q.industry}. Area: ${q.city}.\n\nSearch hits:\n${JSON.stringify(hits, null, 1)}`,
       toolName: "report_businesses",
       toolDescription: "Report each distinct local business found in the search hits",

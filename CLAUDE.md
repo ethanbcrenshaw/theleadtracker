@@ -65,14 +65,28 @@ All mutations are optimistic: update local state, then fire-and-forget the DB wr
   inside server handlers/`.server.ts` modules
 - `types.ts` — generated DB types (currently referenced loosely in store.ts via `as any`)
 
-### Lead discovery (Google Places)
-- `src/routes/api/generate-leads.ts` — POST { industry, city, count, type }. Text-search
-  (≤3 pages), classifies each place's `websiteUri` into `WebsiteOpportunity` buckets
-  (none / social-only / directory-only / has-website), returns raw candidates FAST.
-  Enrichment deliberately does NOT happen here.
-- `src/lib/discover.server.ts` — same Places search extracted for reuse by the assistant.
-- `src/components/crm/AIGenerateModal.tsx` — drives the flow: calls generate-leads, then
-  enriches candidates one-by-one via `/api/enrich-candidate` for per-lead progress UI.
+### Lead discovery (multi-source engine — `src/lib/discovery/`)
+- `index.ts` — orchestrator `runDiscovery`: runs requested sources concurrently with
+  per-source call budgets (SOURCE_CALL_BUDGETS), merges/dedupes, cross-checks non-Google
+  finds against Places (`offGoogle` flag, 15-lookup budget), filters against ALL saved
+  leads (soft-deleted included), sorts off-Google → matchesFilter → rest, bad phones last.
+- Sources: `places.ts` (AI query variants + Knox-metro fan-out — `market.ts`),
+  `firecrawl-search.ts` (FB/Nextdoor/YellowPages/Yelp/Craigslist/BBB/Chamber engine
+  queries + AI extraction), `foursquare.ts` (optional `FOURSQUARE_API_KEY`, 2026
+  places-api.foursquare.com scheme), `knox-registry.ts` (Knox County Clerk new-business
+  filings, county 47 — dates MUST be yyyy-mm-dd), `csv-import.ts` (Data Axle-style lists
+  via `/api/import-csv`, AI column mapping). Every source degrades gracefully when
+  unconfigured. `merge.ts` — E.164 phone keys (libphonenumber-js) + fuzzy name+city;
+  invalid phones flagged `phoneInvalid`, never dropped.
+- `src/routes/api/generate-leads.ts` — POST { industry, city, count, type, sources?,
+  expandMetro? }. With `sources` → runDiscovery (returns perSource counts); without →
+  legacy Places-only path (the assistant's shape). GET reports configured sources.
+- `src/lib/discover.server.ts` — thin re-export of the legacy Places path.
+- `src/components/crm/AIGenerateModal.tsx` — SOURCES toggle chips, [ + SURROUNDING
+  TOWNS ], [ IMPORT CSV ] flow, provenance/OFF GOOGLE/BAD PHONE chips; enriches
+  candidates one-by-one via `/api/enrich-candidate` for per-lead progress UI.
+- `leads.foundVia` (jsonb) persists provenance — migration
+  `20260717120000_found_via.sql`; store retries writes without the column until applied.
 
 ### Verification checks (Phase 2 pipeline)
 - `src/lib/verification.server.ts` — post-discovery check pass: website liveness
