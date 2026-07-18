@@ -10,6 +10,7 @@
 import { runWithConcurrency } from "../enrichment.server";
 import { firecrawlSearchSource } from "./firecrawl-search";
 import { foursquareSource } from "./foursquare";
+import { knoxRegistrySource } from "./knox-registry";
 import { filterAgainstSavedLeads, mergeCandidates, nameKeyOf, phoneKeyOf } from "./merge";
 import { placesLookup, placesSource } from "./places";
 import { SourceBudget } from "./types";
@@ -37,7 +38,7 @@ const REGISTRY: Partial<Record<DiscoverySourceId, DiscoverySource>> = {
   places: placesSource,
   "firecrawl-search": firecrawlSearchSource,
   foursquare: foursquareSource,
-  // knox-registry registers here when it lands.
+  "knox-registry": knoxRegistrySource,
 };
 
 export function availableSources(): Array<{ id: DiscoverySourceId; configured: boolean }> {

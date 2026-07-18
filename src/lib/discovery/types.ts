@@ -50,7 +50,7 @@ export interface DiscoveredCandidate {
   city: string;
   state: string;
   phone: string;
-  owner: null;
+  owner: string | null;
   sourceUrl: string | null;
   website: string | null;
   sources: string[];
