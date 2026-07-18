@@ -115,7 +115,9 @@ export async function runDiscovery(
     extraCandidates?: DiscoveredCandidate[][];
   },
 ): Promise<DiscoveryRunResult> {
-  const requested = opts?.sources?.length ? opts.sources : (["places"] as DiscoverySourceId[]);
+  // Explicit [] means "no discovery sources" (e.g. CSV-only import runs);
+  // omitting the option keeps the legacy Places-only default.
+  const requested = opts?.sources ?? (["places"] as DiscoverySourceId[]);
   const notes: string[] = [];
   const perSource: Record<string, number> = {};
   const resultsBySource = new Map<DiscoverySourceId, DiscoveredCandidate[]>();

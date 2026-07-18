@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiSummarizeCallRouteImport } from './routes/api/summarize-call'
+import { Route as ApiImportCsvRouteImport } from './routes/api/import-csv'
 import { Route as ApiGenerateLeadsRouteImport } from './routes/api/generate-leads'
 import { Route as ApiEnrichLeadRouteImport } from './routes/api/enrich-lead'
 import { Route as ApiEnrichCandidateRouteImport } from './routes/api/enrich-candidate'
@@ -36,6 +37,11 @@ const IndexRoute = IndexRouteImport.update({
 const ApiSummarizeCallRoute = ApiSummarizeCallRouteImport.update({
   id: '/api/summarize-call',
   path: '/api/summarize-call',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiImportCsvRoute = ApiImportCsvRouteImport.update({
+  id: '/api/import-csv',
+  path: '/api/import-csv',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiGenerateLeadsRoute = ApiGenerateLeadsRouteImport.update({
@@ -104,6 +110,7 @@ export interface FileRoutesByFullPath {
   '/api/enrich-candidate': typeof ApiEnrichCandidateRoute
   '/api/enrich-lead': typeof ApiEnrichLeadRoute
   '/api/generate-leads': typeof ApiGenerateLeadsRoute
+  '/api/import-csv': typeof ApiImportCsvRoute
   '/api/summarize-call': typeof ApiSummarizeCallRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
 }
@@ -119,6 +126,7 @@ export interface FileRoutesByTo {
   '/api/enrich-candidate': typeof ApiEnrichCandidateRoute
   '/api/enrich-lead': typeof ApiEnrichLeadRoute
   '/api/generate-leads': typeof ApiGenerateLeadsRoute
+  '/api/import-csv': typeof ApiImportCsvRoute
   '/api/summarize-call': typeof ApiSummarizeCallRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
 }
@@ -135,6 +143,7 @@ export interface FileRoutesById {
   '/api/enrich-candidate': typeof ApiEnrichCandidateRoute
   '/api/enrich-lead': typeof ApiEnrichLeadRoute
   '/api/generate-leads': typeof ApiGenerateLeadsRoute
+  '/api/import-csv': typeof ApiImportCsvRoute
   '/api/summarize-call': typeof ApiSummarizeCallRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
 }
@@ -152,6 +161,7 @@ export interface FileRouteTypes {
     | '/api/enrich-candidate'
     | '/api/enrich-lead'
     | '/api/generate-leads'
+    | '/api/import-csv'
     | '/api/summarize-call'
     | '/.mcp/invoke-tool/$tool'
   fileRoutesByTo: FileRoutesByTo
@@ -167,6 +177,7 @@ export interface FileRouteTypes {
     | '/api/enrich-candidate'
     | '/api/enrich-lead'
     | '/api/generate-leads'
+    | '/api/import-csv'
     | '/api/summarize-call'
     | '/.mcp/invoke-tool/$tool'
   id:
@@ -182,6 +193,7 @@ export interface FileRouteTypes {
     | '/api/enrich-candidate'
     | '/api/enrich-lead'
     | '/api/generate-leads'
+    | '/api/import-csv'
     | '/api/summarize-call'
     | '/.mcp/invoke-tool/$tool'
   fileRoutesById: FileRoutesById
@@ -198,6 +210,7 @@ export interface RootRouteChildren {
   ApiEnrichCandidateRoute: typeof ApiEnrichCandidateRoute
   ApiEnrichLeadRoute: typeof ApiEnrichLeadRoute
   ApiGenerateLeadsRoute: typeof ApiGenerateLeadsRoute
+  ApiImportCsvRoute: typeof ApiImportCsvRoute
   ApiSummarizeCallRoute: typeof ApiSummarizeCallRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
 }
@@ -223,6 +236,13 @@ declare module '@tanstack/react-router' {
       path: '/api/summarize-call'
       fullPath: '/api/summarize-call'
       preLoaderRoute: typeof ApiSummarizeCallRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/import-csv': {
+      id: '/api/import-csv'
+      path: '/api/import-csv'
+      fullPath: '/api/import-csv'
+      preLoaderRoute: typeof ApiImportCsvRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/generate-leads': {
@@ -311,6 +331,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiEnrichCandidateRoute: ApiEnrichCandidateRoute,
   ApiEnrichLeadRoute: ApiEnrichLeadRoute,
   ApiGenerateLeadsRoute: ApiGenerateLeadsRoute,
+  ApiImportCsvRoute: ApiImportCsvRoute,
   ApiSummarizeCallRoute: ApiSummarizeCallRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
 }
