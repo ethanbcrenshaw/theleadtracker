@@ -334,6 +334,8 @@ type StepEvent =
 
 type Body = {
   messages: Array<{ role: "user" | "assistant"; content: string }>;
+  /** Thread id from the assistant page. Absent → legacy single-stream rows. */
+  conversationId?: string;
 };
 
 function normalizeName(s: string) {
@@ -983,7 +985,7 @@ async function firecrawlSearch(query: string, apiKey: string) {
 const SYSTEM_PROMPT = `You are the in-app assistant for "lead bloom", a solo web designer's local-business CRM.
 You operate the CRM via tools. Never invent lead data — everything you report comes from tool results.
 
-Voice: warm, editorial, concise. Use short paragraphs. No emoji. No headings. Mono/uppercase labels are fine when quoting counts.
+Voice: warm, editorial, and BRIEF. Default to 1–3 short sentences; lead with the number or result, then stop. Longer replies only when the user asks for a plan, a list, or an explanation. Never restate the user's question, never narrate what you're about to do, no filler ("Sure!", "Great question"), no sign-offs. No emoji. No headings. Mono/uppercase labels are fine when quoting counts.
 
 Rules:
 - Ground EVERY claim in a tool result. Never say you did something unless the tool result confirms it. If a tool returned an error, a zero count, or a warning field, report that plainly — do not smooth it over or claim success. Honesty about a failure is far better than a false "done".
@@ -1144,10 +1146,12 @@ export const Route = createFileRoute("/api/assistant")({
               : "I couldn't complete that in one pass. Try breaking it into a smaller, more specific request.";
           }
 
-          // Persist user + assistant turns.
+          // Persist user + assistant turns. conversation_id threads the new
+          // assistant page; if the column's migration hasn't been applied yet,
+          // retry without it so chat history never silently stops saving.
           const lastUser = history[history.length - 1];
           if (lastUser?.role === "user") {
-            await sb.from("assistant_messages").insert([
+            const rows = [
               { role: "user", content: lastUser.content },
               {
                 role: "assistant",
@@ -1155,7 +1159,14 @@ export const Route = createFileRoute("/api/assistant")({
                 tool_calls: steps as unknown,
                 pending_action: pendingAction as unknown,
               },
-            ]);
+            ];
+            const withThread = body.conversationId
+              ? rows.map((r) => ({ ...r, conversation_id: body.conversationId }))
+              : rows;
+            const { error: insErr } = await sb.from("assistant_messages").insert(withThread);
+            if (insErr && body.conversationId) {
+              await sb.from("assistant_messages").insert(rows);
+            }
           }
           return Response.json({ reply: finalReply, steps, pendingAction });
         } catch (e) {

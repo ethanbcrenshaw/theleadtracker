@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useLeads } from "@/lib/store";
 import { allTags, exportCSV, isValidContactDate } from "@/lib/crm-utils";
@@ -23,7 +23,6 @@ import { TodayView, type TodayItem } from "@/components/crm/TodayView";
 import { FollowUpView } from "@/components/crm/FollowUpView";
 import { DailyBriefing } from "@/components/crm/DailyBriefing";
 import { ReverifyButton } from "@/components/crm/ReverifyButton";
-import { AssistantPanel } from "@/components/crm/AssistantPanel";
 import { SectionHead } from "@/components/crm/SectionHead";
 import { SchedulePlanner } from "@/components/crm/SchedulePlanner";
 import { plannablePool, todaysSlots, orderForMoment, type CallSchedule } from "@/lib/planner";
@@ -76,7 +75,6 @@ function Dashboard() {
   const setActive = (l: Lead | null) => setActiveId(l ? l.id : null);
   const [aiOpen, setAiOpen] = useState(false);
   const [aiPrefill, setAiPrefill] = useState<{ industry?: string; city?: string }>({});
-  const [assistantOpen, setAssistantOpen] = useState(false);
   const [callLead, setCallLead] = useState<Lead | null>(null);
   const [schedule, setSchedule] = useState<CallSchedule | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -262,9 +260,9 @@ function Dashboard() {
               <Wordmark size={22} />
             </div>
             <div className="flex items-center gap-6">
-              <button onClick={() => setAssistantOpen(true)} className="mono ink-link">
+              <Link to="/assistant" className="mono ink-link">
                 [ ASSISTANT ]
-              </button>
+              </Link>
               <button onClick={() => setAiOpen(true)} className="mono ink-link">
                 [ AI GENERATE ]
               </button>
@@ -531,7 +529,6 @@ function Dashboard() {
         initialCity={aiPrefill.city}
       />
       <AddLeadSheet open={addOpen} onOpenChange={setAddOpen} />
-      <AssistantPanel open={assistantOpen} onClose={() => setAssistantOpen(false)} />
       <BulkBar
         count={selected.size}
         onClear={() => setSelected(new Set())}
