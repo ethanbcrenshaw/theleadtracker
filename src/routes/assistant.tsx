@@ -24,9 +24,9 @@ const MAROON_VARS: Record<string, string> = {
   "--muted-foreground": "oklch(0.74 0.024 40)",
   "--border": "oklch(0.40 0.045 25)",
   "--sienna": "oklch(0.78 0.155 42)",
-  "--frog": "oklch(0.84 0.10 114)",
-  "--frog-ink": "oklch(0.86 0.085 114)",
-  "--frog-tint": "oklch(0.29 0.05 60)",
+  "--frog": "oklch(0.84 0.10 255)",
+  "--frog-ink": "oklch(0.86 0.085 255)",
+  "--frog-tint": "oklch(0.29 0.045 260)",
 };
 
 type Step =

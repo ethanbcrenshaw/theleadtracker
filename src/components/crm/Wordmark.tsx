@@ -2,7 +2,8 @@ import { type CSSProperties, useLayoutEffect, useRef, useState } from "react";
 
 type Props = {
   className?: string;
-  size?: number;
+  /** Rendered height — px number or any CSS length (e.g. a clamp()). */
+  size?: number | string;
   accent?: boolean;
 };
 
@@ -34,7 +35,9 @@ export function Wordmark({ className, size = 22, accent = true }: Props) {
       // Flower occupies the visual space of one "o" character (~0.44em in this serif).
       const oWidth = fontSize * 0.42;
       const gap = fontSize * 0.02;
-      const flowerX = beforeW + oWidth / 2;
+      // Nudge left of the geometric midpoint: beforeW includes the trailing
+      // "o"'s right side bearing, which otherwise pushes the flower right.
+      const flowerX = beforeW + oWidth / 2 - fontSize * 0.035;
       const afterX = beforeW + oWidth + gap;
       const total = afterX + afterW + 4;
       setLayout({ w: total, flowerX, afterX });
@@ -49,7 +52,10 @@ export function Wordmark({ className, size = 22, accent = true }: Props) {
 
   const petalR = 5.4;
   const petalOffset = 5.2;
-  const flowerY = fontSize * 0.42; // roughly the vertical center of a lowercase o
+  // Center of a lowercase "o": baseline (0.85em from top) minus half the
+  // x-height (~0.45em in Instrument Serif) → ~0.625em. The old 0.42em sat
+  // the flower near the top of the letterforms.
+  const flowerY = fontSize * 0.625;
   const style: CSSProperties = { height: size, width: "auto", display: "block" };
   const textStyle: CSSProperties = {
     fontFamily: '"Instrument Serif", serif',
@@ -68,7 +74,13 @@ export function Wordmark({ className, size = 22, accent = true }: Props) {
       <text ref={beforeRef} x="0" y={fontSize * 0.85} fill="currentColor" style={textStyle}>
         {before}
       </text>
-      <text ref={afterRef} x={layout.afterX} y={fontSize * 0.85} fill="currentColor" style={textStyle}>
+      <text
+        ref={afterRef}
+        x={layout.afterX}
+        y={fontSize * 0.85}
+        fill="currentColor"
+        style={textStyle}
+      >
         {after}
       </text>
       <g

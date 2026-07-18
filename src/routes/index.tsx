@@ -306,10 +306,12 @@ function Dashboard() {
             CRM — LOCAL BUSINESS OUTREACH — 2026
           </div>
           <div className="relative mt-6 grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-10 items-end">
-            <h1 className="font-display font-normal lowercase tracking-tight leading-[0.95] text-[clamp(4rem,11vw,7rem)]">
-              <span className="text-[color:var(--sienna)]">leads</span>
+            {/* The brand mark IS the headline — one treatment, two sizes. */}
+            <h1 className="text-[color:var(--sienna)]">
+              <Wordmark size="clamp(3.2rem, 8.5vw, 5.6rem)" accent={false} />
             </h1>
-            <p className="text-muted-foreground max-w-sm lg:text-right leading-relaxed text-sm">
+            {/* md:mr keeps the copy clear of the flower illustration zone. */}
+            <p className="text-muted-foreground max-w-sm lg:text-right leading-relaxed text-sm md:mr-64 lg:mr-64">
               A working ledger for local businesses. Track, prioritize, and follow up on the ones
               most likely to say yes. Start with the highest-opportunity entries.
             </p>

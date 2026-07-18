@@ -64,116 +64,118 @@
   --radius: 0rem;
 
   /* Paper cream + warm ink */
-  --background: oklch(0.947 0.015 90);          /* #F2EEE3 */
-  --foreground: oklch(0.220 0.008 70);          /* #201D1A warm ink */
+  --background: oklch(0.947 0.015 90); /* #F2EEE3 */
+  --foreground: oklch(0.22 0.008 70); /* #201D1A warm ink */
 
-  --card: oklch(0.955 0.014 88);                /* same paper, ~1% brighter */
+  --card: oklch(0.955 0.014 88); /* same paper, ~1% brighter */
   --card-foreground: var(--foreground);
 
-  --popover: oklch(0.960 0.014 88);
+  --popover: oklch(0.96 0.014 88);
   --popover-foreground: var(--foreground);
 
   /* Primary = ink itself. Solid ink buttons with cream text. */
-  --primary: oklch(0.220 0.008 70);
+  --primary: oklch(0.22 0.008 70);
   --primary-foreground: oklch(0.947 0.015 90);
 
-  --secondary: oklch(0.920 0.014 88);           /* faint oat wash */
+  --secondary: oklch(0.92 0.014 88); /* faint oat wash */
   --secondary-foreground: var(--foreground);
 
-  --muted: oklch(0.920 0.014 88);
-  --muted-foreground: oklch(0.475 0.012 70);    /* warm grey ink ~55% */
+  --muted: oklch(0.92 0.014 88);
+  --muted-foreground: oklch(0.475 0.012 70); /* warm grey ink ~55% */
 
-  --accent: oklch(0.55 0.20 30);                /* warm vermillion (~#C0392B) */
+  --accent: oklch(0.55 0.155 42); /* editorial red — matches /assistant */
   --accent-foreground: oklch(0.947 0.015 90);
 
-  --destructive: oklch(0.55 0.20 30);
+  --destructive: oklch(0.55 0.155 42);
   --destructive-foreground: oklch(0.947 0.015 90);
 
   /* 1px hairline: ink at 14% */
-  --border: color-mix(in oklab, oklch(0.220 0.008 70) 14%, transparent);
-  --input: color-mix(in oklab, oklch(0.220 0.008 70) 20%, transparent);
-  --ring: oklch(0.220 0.008 70);
+  --border: color-mix(in oklab, oklch(0.22 0.008 70) 14%, transparent);
+  --input: color-mix(in oklab, oklch(0.22 0.008 70) 20%, transparent);
+  --ring: oklch(0.22 0.008 70);
 
   /* Restrained editorial accents */
-  --sienna: oklch(0.55 0.20 30);                /* warm vermillion emphasis */
-  --olive:  oklch(0.520 0.055 110);
+  --sienna: oklch(0.55 0.155 42); /* editorial red emphasis — same family as /assistant */
+  --olive: oklch(0.52 0.055 110);
 
-  /* Second accent — pale "frog" green. Semantic: positive / healthy / confirmed. */
-  --frog: oklch(0.83 0.11 113);
-  --frog-ink: oklch(0.42 0.09 118);             /* deep olive-green, AA on cream */
-  --frog-tint: color-mix(in oklab, oklch(0.83 0.11 113) 16%, var(--background));
+  /* Second accent — "frog" blue (var names kept for compatibility).
+     Same color family as the red: identical chroma, identical per-mode
+     lightness, hue rotated to blue. Semantic: positive / healthy / confirmed. */
+  --frog: oklch(0.83 0.11 255);
+  --frog-ink: oklch(0.55 0.155 255); /* mirrors --sienna's L/C on cream */
+  --frog-tint: color-mix(in oklab, oklch(0.83 0.11 255) 16%, var(--background));
 
   /* Legacy semantic tokens remapped into the print system so old
      className references keep working with the new look. */
-  --navy: oklch(0.220 0.008 70);                    /* ink */
-  --navy-foreground: oklch(0.947 0.015 90);         /* paper */
-  --maroon: oklch(0.220 0.008 70);                  /* ink (primary) */
+  --navy: oklch(0.22 0.008 70); /* ink */
+  --navy-foreground: oklch(0.947 0.015 90); /* paper */
+  --maroon: oklch(0.22 0.008 70); /* ink (primary) */
   --maroon-foreground: oklch(0.947 0.015 90);
-  --tan: oklch(0.920 0.014 88);                     /* faint oat */
-  --tan-foreground: oklch(0.220 0.008 70);
-  --sage: oklch(0.520 0.055 110);                   /* olive */
+  --tan: oklch(0.92 0.014 88); /* faint oat */
+  --tan-foreground: oklch(0.22 0.008 70);
+  --sage: oklch(0.52 0.055 110); /* olive */
   --sage-foreground: oklch(0.947 0.015 90);
-  --gold: oklch(0.620 0.020 70);                    /* warm grey */
+  --gold: oklch(0.62 0.02 70); /* warm grey */
   --gold-foreground: oklch(0.947 0.015 90);
-  --clay: oklch(0.55 0.20 30);                      /* red */
+  --clay: oklch(0.55 0.155 42); /* red */
   --clay-foreground: oklch(0.947 0.015 90);
 
-  --chart-1: oklch(0.220 0.008 70);
-  --chart-2: oklch(0.55 0.20 30);
+  --chart-1: oklch(0.22 0.008 70);
+  --chart-2: oklch(0.55 0.155 42);
   --chart-3: var(--frog-ink);
-  --chart-4: oklch(0.620 0.020 70);
-  --chart-5: oklch(0.400 0.008 70);
+  --chart-4: oklch(0.62 0.02 70);
+  --chart-5: oklch(0.4 0.008 70);
 }
 
 .dark {
   /* Ink paper: inverted, same rules. */
-  --background: oklch(0.170 0.008 70);          /* #171512 */
-  --foreground: oklch(0.935 0.014 85);          /* #EDE8DC cream */
+  --background: oklch(0.17 0.008 70); /* #171512 */
+  --foreground: oklch(0.935 0.014 85); /* #EDE8DC cream */
 
   --card: oklch(0.185 0.008 70);
   --card-foreground: var(--foreground);
 
-  --popover: oklch(0.200 0.008 70);
+  --popover: oklch(0.2 0.008 70);
   --popover-foreground: var(--foreground);
 
   --primary: oklch(0.935 0.014 85);
-  --primary-foreground: oklch(0.170 0.008 70);
+  --primary-foreground: oklch(0.17 0.008 70);
 
-  --secondary: oklch(0.230 0.008 70);
+  --secondary: oklch(0.23 0.008 70);
   --secondary-foreground: var(--foreground);
 
-  --muted: oklch(0.230 0.008 70);
-  --muted-foreground: oklch(0.700 0.012 80);
+  --muted: oklch(0.23 0.008 70);
+  --muted-foreground: oklch(0.7 0.012 80);
 
-  --accent: oklch(0.68 0.20 30);                /* brighter vermillion on ink */
-  --accent-foreground: oklch(0.170 0.008 70);
+  --accent: oklch(0.78 0.155 42); /* the /assistant red, exactly */
+  --accent-foreground: oklch(0.17 0.008 70);
 
-  --destructive: oklch(0.68 0.20 30);
-  --destructive-foreground: oklch(0.170 0.008 70);
+  --destructive: oklch(0.78 0.155 42);
+  --destructive-foreground: oklch(0.17 0.008 70);
 
   --border: color-mix(in oklab, oklch(0.935 0.014 85) 16%, transparent);
   --input: color-mix(in oklab, oklch(0.935 0.014 85) 22%, transparent);
   --ring: oklch(0.935 0.014 85);
 
-  --sienna: oklch(0.68 0.20 30);
-  --olive:  oklch(0.630 0.055 110);
+  --sienna: oklch(0.78 0.155 42);
+  --olive: oklch(0.63 0.055 110);
 
-  --frog: oklch(0.80 0.11 113);
-  --frog-ink: oklch(0.82 0.10 113);
-  --frog-tint: color-mix(in oklab, oklch(0.80 0.11 113) 10%, var(--background));
+  --frog: oklch(0.8 0.11 255);
+  --frog-ink: oklch(0.78 0.155 255); /* mirrors dark --sienna's L/C */
+  --frog-tint: color-mix(in oklab, oklch(0.8 0.11 255) 10%, var(--background));
 
   --navy: oklch(0.935 0.014 85);
-  --navy-foreground: oklch(0.170 0.008 70);
+  --navy-foreground: oklch(0.17 0.008 70);
   --maroon: oklch(0.935 0.014 85);
-  --maroon-foreground: oklch(0.170 0.008 70);
-  --tan: oklch(0.230 0.008 70);
+  --maroon-foreground: oklch(0.17 0.008 70);
+  --tan: oklch(0.23 0.008 70);
   --tan-foreground: var(--foreground);
-  --sage: oklch(0.630 0.055 110);
-  --sage-foreground: oklch(0.170 0.008 70);
-  --gold: oklch(0.700 0.012 80);
-  --gold-foreground: oklch(0.170 0.008 70);
-  --clay: oklch(0.68 0.20 30);
-  --clay-foreground: oklch(0.170 0.008 70);
+  --sage: oklch(0.63 0.055 110);
+  --sage-foreground: oklch(0.17 0.008 70);
+  --gold: oklch(0.7 0.012 80);
+  --gold-foreground: oklch(0.17 0.008 70);
+  --clay: oklch(0.78 0.155 42);
+  --clay-foreground: oklch(0.17 0.008 70);
 
   --shadow-soft: 0 0 #0000;
   --shadow-elev: 0 0 #0000;
@@ -184,7 +186,8 @@
     border-color: var(--color-border);
   }
 
-  html, body {
+  html,
+  body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
@@ -192,7 +195,10 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  h1, h2, h3, h4 {
+  h1,
+  h2,
+  h3,
+  h4 {
     font-family: var(--font-display);
     letter-spacing: -0.01em;
     font-weight: 400;
