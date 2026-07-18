@@ -70,6 +70,7 @@ type LeadRow = {
   verificationReasons: string[] | null;
   leadScore: number | null;
   verification: LeadVerification | null;
+  foundVia: string[] | null;
   created_at?: string;
 };
 
@@ -110,6 +111,7 @@ function rowToLead(r: LeadRow): Lead {
   if (r.verificationReasons != null) l.verificationReasons = r.verificationReasons;
   if (r.leadScore != null) l.leadScore = r.leadScore;
   if (r.verification != null) l.verification = r.verification;
+  if (r.foundVia != null) l.foundVia = r.foundVia;
   return sanitizeLead(l);
 }
 
@@ -149,6 +151,7 @@ function leadToRow(l: Lead): LeadRow {
     verificationReasons: l.verificationReasons ?? null,
     leadScore: l.leadScore ?? null,
     verification: l.verification ?? null,
+    foundVia: l.foundVia ?? null,
   };
 }
 
@@ -163,15 +166,52 @@ function logErr(scope: string, err: unknown) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = () => (supabase as any).from(TABLE);
 
+// The DB may not have the newest optional columns yet (migrations are applied
+// by hand). If a write bounces off a missing column, retry once without it so
+// a pending migration never blocks saving leads.
+function isMissingColumnError(error: unknown): boolean {
+  const e = error as { code?: string; message?: string } | null;
+  if (!e) return false;
+  return (
+    e.code === "42703" ||
+    e.code === "PGRST204" ||
+    /column .* does not exist|foundVia/i.test(e.message ?? "")
+  );
+}
+
+const OPTIONAL_COLUMNS = ["foundVia"] as const;
+
+function stripOptionalColumns(rows: LeadRow[]): Omit<LeadRow, "foundVia">[] {
+  return rows.map((r) => {
+    const copy: Record<string, unknown> = { ...r };
+    for (const c of OPTIONAL_COLUMNS) delete copy[c];
+    return copy as Omit<LeadRow, "foundVia">;
+  });
+}
+
 async function dbInsertMany(leads: Lead[]) {
   if (!leads.length) return;
-  const { error } = await db().insert(leads.map(leadToRow));
+  const rows = leads.map(leadToRow);
+  const { error } = await db().insert(rows);
+  if (error && isMissingColumnError(error)) {
+    logErr("insert (retrying without optional columns — run the foundVia migration)", error);
+    const { error: retryErr } = await db().insert(stripOptionalColumns(rows));
+    logErr("insert-retry", retryErr);
+    return;
+  }
   logErr("insert", error);
 }
 
 async function dbUpsertMany(leads: Lead[]) {
   if (!leads.length) return;
-  const { error } = await db().upsert(leads.map(leadToRow));
+  const rows = leads.map(leadToRow);
+  const { error } = await db().upsert(rows);
+  if (error && isMissingColumnError(error)) {
+    logErr("upsert (retrying without optional columns — run the foundVia migration)", error);
+    const { error: retryErr } = await db().upsert(stripOptionalColumns(rows));
+    logErr("upsert-retry", retryErr);
+    return;
+  }
   logErr("upsert", error);
 }
 

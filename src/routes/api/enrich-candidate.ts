@@ -58,6 +58,19 @@ export const Route = createFileRoute("/api/enrich-candidate")({
             offGoogle: body.offGoogle,
             foundVia: body.foundVia,
           });
+          // Provenance evidence chips from multi-source discovery.
+          const SOURCE_LABEL: Record<string, string> = {
+            places: "google",
+            "firecrawl-search": "web",
+            foursquare: "foursquare",
+            "csv-import": "csv",
+            "knox-registry": "registry",
+          };
+          if ((body.foundVia?.length ?? 0) >= 2) {
+            const names = body.foundVia!.map((s) => SOURCE_LABEL[s] ?? s).join(" + ");
+            result.confidenceEvidence.push(`corroborated — ${names}`);
+          }
+          if (body.offGoogle) result.confidenceEvidence.push("off Google");
           return Response.json({ ok: true, result: { ...result, verification, leadScore } });
         } catch (e) {
           return Response.json(

@@ -273,6 +273,11 @@ export function computeLeadScore(input: ScoreInput): number {
   // Callable — max 15
   if (hasPhone) score += 15;
 
+  // Corroboration: independently found by 2+ discovery sources. Worth a real
+  // bump, but sized so it can't outweigh a dead phone (-15 callable) or a
+  // closure (tier drops to unverified, -15 vs verified).
+  if ((input.foundVia?.length ?? 0) >= 2) score += 8;
+
   // Identity verification — max 15
   if (input.tier === "verified") score += 15;
   else if (input.tier === "partial") score += 7;

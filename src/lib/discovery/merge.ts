@@ -7,13 +7,39 @@
 // against ALL saved leads (including soft-deleted ones, so scrapped leads
 // don't resurrect on the next generate).
 
+import { parsePhoneNumberFromString } from "libphonenumber-js";
 import type { DiscoveredCandidate } from "./types";
 
-/** Strip to the last 10 digits; null when it can't be a US number. */
+/**
+ * Canonical dedupe key for a phone: E.164 when it validates as a US number,
+ * else the last 10 digits (so typo'd duplicates still merge), else null.
+ */
 export function phoneKeyOf(raw: string | null | undefined): string | null {
-  const digits = (raw || "").replace(/\D/g, "");
+  const s = (raw || "").trim();
+  if (!s) return null;
+  const p = parsePhoneNumberFromString(s, "US");
+  if (p?.isValid()) return p.number;
+  const digits = s.replace(/\D/g, "");
   if (digits.length < 10) return null;
   return digits.slice(-10);
+}
+
+/**
+ * Validate + normalize a candidate's phone in place. Valid numbers get the
+ * national display format (matches Places' style); invalid non-empty ones
+ * are kept but flagged phoneInvalid — registries have typos the user can fix
+ * by eye, so we surface rather than drop.
+ */
+export function normalizeCandidatePhone(c: DiscoveredCandidate): void {
+  const raw = (c.phone || "").trim();
+  if (!raw) return;
+  const p = parsePhoneNumberFromString(raw, "US");
+  if (p?.isValid()) {
+    c.phone = p.formatNational();
+    c.phoneInvalid = undefined;
+  } else {
+    c.phoneInvalid = true;
+  }
 }
 
 const LEGAL_SUFFIX =
@@ -57,9 +83,16 @@ function mergeTwo(a: DiscoveredCandidate, b: DiscoveredCandidate): DiscoveredCan
   const [rich, poor] = richness(a) >= richness(b) ? [a, b] : [b, a];
   const places = isFromPlaces(a) ? a : isFromPlaces(b) ? b : null;
 
+  // Prefer a valid phone over an invalid one regardless of richness.
+  const richPhoneOk = Boolean(rich.phone) && !rich.phoneInvalid;
+  const poorPhoneOk = Boolean(poor.phone) && !poor.phoneInvalid;
+  const phonePick = richPhoneOk ? rich : poorPhoneOk ? poor : rich.phone ? rich : poor;
+
   const merged: DiscoveredCandidate = {
     ...rich,
-    phone: rich.phone || poor.phone,
+    phone: phonePick.phone,
+    phoneInvalid: phonePick.phoneInvalid,
+    owner: rich.owner || poor.owner,
     website: rich.website || poor.website,
     sourceUrl: rich.sourceUrl || poor.sourceUrl,
     onlinePresence: rich.onlinePresence || poor.onlinePresence,
@@ -94,6 +127,7 @@ export function mergeCandidates(lists: DiscoveredCandidate[][]): DiscoveredCandi
 
   for (const list of lists) {
     for (const cand of list) {
+      normalizeCandidatePhone(cand);
       const pk = phoneKeyOf(cand.phone);
       const nk = nameCityKeyOf(cand);
       const primary = pk ?? nk;

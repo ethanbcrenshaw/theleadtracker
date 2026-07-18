@@ -181,4 +181,5 @@ export interface Lead {
   verificationReasons?: string[];
   leadScore?: number; // composite 0-100 opportunity score
   verification?: LeadVerification;
+  foundVia?: string[]; // discovery source ids that found this lead (provenance)
 }

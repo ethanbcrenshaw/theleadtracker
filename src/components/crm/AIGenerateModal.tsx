@@ -73,6 +73,11 @@ type Candidate = {
     reviewCount?: number;
     lastReviewAt?: string;
   };
+  // multi-source discovery provenance
+  foundVia?: string[];
+  offGoogle?: boolean;
+  registeredAt?: string;
+  phoneInvalid?: boolean;
   // filled during enrichment phase
   enrichment?: LeadEnrichment;
   confidenceScore?: number;
@@ -88,9 +93,26 @@ type Candidate = {
   _enrichState: "pending" | "running" | "done" | "failed";
 };
 
-type Phase = "form" | "searching" | "enriching" | "review";
+type Phase = "form" | "searching" | "enriching" | "review" | "csv" | "csv-map";
 
 const ENRICH_CONCURRENCY = 3;
+
+// Discovery source ids ↔ chip labels (mono, editorial).
+const SOURCE_META: Array<{ id: string; label: string; short: string }> = [
+  { id: "places", label: "GOOGLE", short: "GOOGLE" },
+  { id: "firecrawl-search", label: "WEB SEARCH", short: "WEB" },
+  { id: "foursquare", label: "FOURSQUARE", short: "FSQ" },
+  { id: "knox-registry", label: "NEW FILINGS", short: "FILINGS" },
+];
+const SHORT_LABEL: Record<string, string> = Object.fromEntries(
+  SOURCE_META.map((s) => [s.id, s.short]),
+);
+SHORT_LABEL["csv-import"] = "CSV";
+
+type SourceInfo = { id: string; configured: boolean };
+type CsvField = "business" | "phone" | "city" | "state" | "website";
+const CSV_FIELDS: CsvField[] = ["business", "phone", "city", "state", "website"];
+type CsvMapping = Record<CsvField, string | null>;
 
 async function runConcurrent<T>(
   items: T[],
@@ -122,11 +144,34 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
   const [error, setError] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [enrichDone, setEnrichDone] = useState(0);
+  // multi-source discovery
+  const [srcInfo, setSrcInfo] = useState<SourceInfo[]>([]);
+  const [selectedSources, setSelectedSources] = useState<Set<string>>(
+    () => new Set(["places", "firecrawl-search"]),
+  );
+  const [expandMetro, setExpandMetro] = useState(false);
+  const [perSource, setPerSource] = useState<Record<string, number> | null>(null);
+  const [droppedExisting, setDroppedExisting] = useState(0);
+  // CSV import
+  const [csvText, setCsvText] = useState("");
+  const [csvMapping, setCsvMapping] = useState<CsvMapping | null>(null);
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [csvRowCount, setCsvRowCount] = useState(0);
+  const [csvBusy, setCsvBusy] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     if (initialIndustry) setIndustry(initialIndustry);
     if (initialCity) setCity(initialCity);
+    // Which sources have keys configured? Default configured ones on.
+    fetch("/api/generate-leads")
+      .then((r) => r.json())
+      .then((j: { sources?: SourceInfo[] }) => {
+        if (!Array.isArray(j.sources)) return;
+        setSrcInfo(j.sources);
+        setSelectedSources(new Set(j.sources.filter((s) => s.configured).map((s) => s.id)));
+      })
+      .catch(() => {});
   }, [open, initialIndustry, initialCity]);
 
   function reset() {
@@ -134,10 +179,30 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
     setError(null);
     setPhase("form");
     setEnrichDone(0);
+    setPerSource(null);
+    setDroppedExisting(0);
+    setCsvText("");
+    setCsvMapping(null);
+    setCsvHeaders([]);
+    setCsvRowCount(0);
+    setCsvBusy(false);
   }
   function close() {
     reset();
     onClose();
+  }
+
+  /** Client-side belt over the server's saved-lead dedupe (live leads only). */
+  function dedupeAgainstLoaded(raw: Candidate[]): Candidate[] {
+    const seenNames = new Set(existing.map((l) => l.business.toLowerCase().trim()));
+    const seenPhones = new Set(existing.map((l) => l.phone?.replace(/\D/g, "")).filter(Boolean));
+    return raw.filter((r) => {
+      const key = (r.business || "").toLowerCase().trim();
+      if (!key || seenNames.has(key)) return false;
+      const ph = (r.phone || "").replace(/\D/g, "");
+      if (ph && seenPhones.has(ph)) return false;
+      return true;
+    });
   }
 
   async function start() {
@@ -147,99 +212,165 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
       const res = await fetch("/api/generate-leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ industry, city, count, type }),
+        body: JSON.stringify({
+          industry,
+          city,
+          count,
+          type,
+          sources: [...selectedSources],
+          expandMetro,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+      setPerSource(data.perSource ?? null);
+      setDroppedExisting(data.droppedExisting ?? 0);
 
-      const seenNames = new Set(existing.map((l) => l.business.toLowerCase().trim()));
-      const seenPhones = new Set(existing.map((l) => l.phone?.replace(/\D/g, "")).filter(Boolean));
-
-      const raw: Candidate[] = (Array.isArray(data.leads) ? data.leads : [])
-        .filter((r: Candidate) => {
-          const key = (r.business || "").toLowerCase().trim();
-          if (!key || seenNames.has(key)) return false;
-          const ph = (r.phone || "").replace(/\D/g, "");
-          if (ph && seenPhones.has(ph)) return false;
-          return true;
-        })
-        .map((r: Candidate, i: number) => ({
+      const raw: Candidate[] = dedupeAgainstLoaded(Array.isArray(data.leads) ? data.leads : []).map(
+        (r: Candidate, i: number) => ({
           ...r,
           _id: `${i}-${r.business}`,
           _selected: false,
           _enrichState: "pending" as const,
-        }));
+        }),
+      );
 
       if (!raw.length) {
-        setError("No new leads found. Try a different city or lead type.");
+        setError("No new leads found. Try a different city, lead type, or more sources.");
         setPhase("form");
         return;
       }
 
-      setCandidates(raw);
-      setPhase("enriching");
-      setEnrichDone(0);
-
-      // Enrich every candidate (no cap) — concurrency 3.
-      await runConcurrent(raw, ENRICH_CONCURRENCY, async (cand) => {
-        cand._enrichState = "running";
-        setCandidates((cs) => [...cs]);
-        try {
-          const r = await fetch("/api/enrich-candidate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              business: cand.business,
-              city: cand.city,
-              state: cand.state,
-              phone: cand.phone,
-              website: cand.website,
-              websiteOpportunity: cand.websiteOpportunity,
-              placesSignals: cand.placesSignals,
-            }),
-          });
-          const j = await r.json();
-          if (!r.ok || !j.ok) throw new Error(j.error || `enrich ${r.status}`);
-          const result = j.result;
-          cand.enrichment = result.enrichment;
-          cand.confidenceScore = result.confidenceScore;
-          cand.confidenceEvidence = result.confidenceEvidence;
-          cand.unverified = result.unverified;
-          cand.unverifiedReason = result.unverifiedReason;
-          cand.verificationTier = result.verificationTier;
-          cand.verificationReasons = result.verificationReasons;
-          cand.verification = result.verification;
-          cand.leadScore = result.leadScore;
-
-          // Reflect verified website status back onto the opp label.
-          const ws = result.enrichment?.websiteStatus;
-          if (ws === "none" && cand.website) {
-            cand.websiteOpportunity = "No Dedicated Website";
-            cand.onlinePresence = `Claimed site (${cand.website}) unreachable`;
-            cand.website = null;
-          } else if (ws === "outdated") {
-            cand.websiteOpportunity = "Outdated Website";
-          }
-          cand._enrichState = "done";
-        } catch {
-          cand.verificationTier = "partial";
-          cand.verificationReasons = ["enrichment failed — could not verify"];
-          cand.confidenceScore = 20;
-          cand.confidenceEvidence = ["enrichment failed"];
-          cand._enrichState = "failed";
-        }
-        setEnrichDone((n) => n + 1);
-        setCandidates((cs) => [...cs]);
-      });
-
-      // Pre-select only VERIFIED candidates after enrichment.
-      setCandidates((cs) =>
-        cs.map((c) => ({ ...c, _selected: c.verificationTier === "verified" })),
-      );
-      setPhase("review");
+      await runEnrichment(raw);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
       setPhase("form");
+    }
+  }
+
+  /** Enrich a candidate batch (shared by generate + CSV import), then review. */
+  async function runEnrichment(raw: Candidate[]) {
+    setCandidates(raw);
+    setPhase("enriching");
+    setEnrichDone(0);
+
+    // Enrich every candidate (no cap) — concurrency 3.
+    await runConcurrent(raw, ENRICH_CONCURRENCY, async (cand) => {
+      cand._enrichState = "running";
+      setCandidates((cs) => [...cs]);
+      try {
+        const r = await fetch("/api/enrich-candidate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            business: cand.business,
+            city: cand.city,
+            state: cand.state,
+            phone: cand.phone,
+            website: cand.website,
+            websiteOpportunity: cand.websiteOpportunity,
+            placesSignals: cand.placesSignals,
+            offGoogle: cand.offGoogle,
+            foundVia: cand.foundVia,
+          }),
+        });
+        const j = await r.json();
+        if (!r.ok || !j.ok) throw new Error(j.error || `enrich ${r.status}`);
+        const result = j.result;
+        cand.enrichment = result.enrichment;
+        cand.confidenceScore = result.confidenceScore;
+        cand.confidenceEvidence = result.confidenceEvidence;
+        cand.unverified = result.unverified;
+        cand.unverifiedReason = result.unverifiedReason;
+        cand.verificationTier = result.verificationTier;
+        cand.verificationReasons = result.verificationReasons;
+        cand.verification = result.verification;
+        cand.leadScore = result.leadScore;
+
+        // Reflect verified website status back onto the opp label.
+        const ws = result.enrichment?.websiteStatus;
+        if (ws === "none" && cand.website) {
+          cand.websiteOpportunity = "No Dedicated Website";
+          cand.onlinePresence = `Claimed site (${cand.website}) unreachable`;
+          cand.website = null;
+        } else if (ws === "outdated") {
+          cand.websiteOpportunity = "Outdated Website";
+        }
+        cand._enrichState = "done";
+      } catch {
+        cand.verificationTier = "partial";
+        cand.verificationReasons = ["enrichment failed — could not verify"];
+        cand.confidenceScore = 20;
+        cand.confidenceEvidence = ["enrichment failed"];
+        cand._enrichState = "failed";
+      }
+      setEnrichDone((n) => n + 1);
+      setCandidates((cs) => [...cs]);
+    });
+
+    // Pre-select only VERIFIED candidates after enrichment.
+    setCandidates((cs) => cs.map((c) => ({ ...c, _selected: c.verificationTier === "verified" })));
+    setPhase("review");
+  }
+
+  // ── CSV import (Data Axle etc.) ───────────────────────────────────────────
+
+  async function csvProposeMapping() {
+    if (!csvText.trim()) return;
+    setCsvBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/import-csv", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "map", csv: csvText }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || `mapping failed (${res.status})`);
+      setCsvHeaders(j.headers ?? []);
+      setCsvMapping(j.mapping ?? null);
+      setCsvRowCount(j.rowCount ?? 0);
+      setPhase("csv-map");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not read that CSV");
+    } finally {
+      setCsvBusy(false);
+    }
+  }
+
+  async function csvImport() {
+    if (!csvMapping) return;
+    setCsvBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/import-csv", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "import", csv: csvText, mapping: csvMapping, type, city }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || `import failed (${res.status})`);
+      setDroppedExisting(j.droppedExisting ?? 0);
+      setPerSource({ "csv-import": (j.candidates ?? []).length });
+      const raw: Candidate[] = dedupeAgainstLoaded(j.candidates ?? []).map(
+        (r: Candidate, i: number) => ({
+          ...r,
+          _id: `csv-${i}-${r.business}`,
+          _selected: false,
+          _enrichState: "pending" as const,
+        }),
+      );
+      if (!raw.length) {
+        setError("Every row matched a lead you already have (or had no usable name).");
+        setCsvBusy(false);
+        setPhase("csv");
+        return;
+      }
+      setCsvBusy(false);
+      await runEnrichment(raw);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Import failed");
+      setCsvBusy(false);
     }
   }
 
@@ -285,6 +416,7 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
         verificationReasons: r.verificationReasons,
         verification: r.verification,
         leadScore: r.leadScore,
+        foundVia: r.foundVia,
       };
     });
 
@@ -327,7 +459,11 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
                         ? "verifying leads"
                         : phase === "searching"
                           ? "searching"
-                          : "generate leads"}
+                          : phase === "csv"
+                            ? "import a lead list"
+                            : phase === "csv-map"
+                              ? "confirm columns"
+                              : "generate leads"}
                   </h2>
                 </div>
                 <div className="flex items-center gap-3">
@@ -392,6 +528,57 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
                       </select>
                     </Field>
                   </div>
+
+                  <div className="mt-4">
+                    <span className="mono text-muted-foreground">— Sources</span>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {SOURCE_META.map((s) => {
+                        const info = srcInfo.find((x) => x.id === s.id);
+                        const configured = info ? info.configured : s.id === "places";
+                        const on = selectedSources.has(s.id);
+                        return (
+                          <button
+                            key={s.id}
+                            disabled={!configured}
+                            title={configured ? undefined : "add the API key in .env to enable"}
+                            onClick={() =>
+                              setSelectedSources((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(s.id)) next.delete(s.id);
+                                else next.add(s.id);
+                                return next;
+                              })
+                            }
+                            className={`mono border px-2 py-1 transition ${
+                              !configured
+                                ? "border-border text-muted-foreground/50 cursor-not-allowed"
+                                : on
+                                  ? "border-foreground bg-foreground text-background"
+                                  : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
+                            }`}
+                          >
+                            [ {s.label} ]
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {srcInfo.some((s) => !s.configured) && (
+                      <p className="mono text-muted-foreground/70 mt-1.5">
+                        greyed sources need an API key in .env
+                      </p>
+                    )}
+                    <label className="mono mt-3 flex items-center gap-2 cursor-pointer text-muted-foreground hover:text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={expandMetro}
+                        onChange={(e) => setExpandMetro(e.target.checked)}
+                        className="h-3.5 w-3.5 rounded-none accent-foreground"
+                      />
+                      [ + SURROUNDING TOWNS ]
+                      <span className="text-muted-foreground/70">Knox metro fan-out</span>
+                    </label>
+                  </div>
+
                   {error && (
                     <div className="mt-3 flex items-start gap-2 border border-destructive p-3 text-xs text-destructive">
                       <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" /> {error}
@@ -399,9 +586,19 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
                   )}
                   <button
                     onClick={start}
-                    className="mono mt-5 w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-foreground text-background hover:opacity-90"
+                    disabled={selectedSources.size === 0}
+                    className="mono mt-5 w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-foreground text-background hover:opacity-90 disabled:opacity-50"
                   >
                     <Sparkles className="h-3.5 w-3.5" /> [ FIND & VERIFY ]
+                  </button>
+                  <button
+                    onClick={() => {
+                      setError(null);
+                      setPhase("csv");
+                    }}
+                    className="mono mt-3 w-full px-4 py-2.5 border border-border text-muted-foreground hover:border-foreground hover:text-foreground"
+                  >
+                    [ IMPORT CSV ] — Data Axle or any business list
                   </button>
                 </div>
               )}
@@ -409,12 +606,110 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
               {phase === "searching" && (
                 <div className="p-10 flex flex-col items-center gap-3">
                   <Loader2 className="h-5 w-5 animate-spin" />
-                  <div className="mono text-muted-foreground">searching Google Places…</div>
+                  <div className="mono text-muted-foreground">
+                    SEARCHING —{" "}
+                    {SOURCE_META.filter((s) => selectedSources.has(s.id))
+                      .map((s) => `${s.short} ···`)
+                      .join(" · ")}
+                  </div>
+                </div>
+              )}
+
+              {phase === "csv" && (
+                <div className="p-6 overflow-y-auto flex-1">
+                  <p className="mono text-muted-foreground mb-3">
+                    Paste CSV text or pick a file (Data Axle export or any list with business
+                    names). Columns get AI-mapped; you confirm before anything imports.
+                  </p>
+                  <input
+                    type="file"
+                    accept=".csv,text/csv,text/plain"
+                    className="mono text-muted-foreground mb-3 block w-full"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (!f) return;
+                      const reader = new FileReader();
+                      reader.onload = () => setCsvText(String(reader.result || ""));
+                      reader.readAsText(f);
+                    }}
+                  />
+                  <textarea
+                    value={csvText}
+                    onChange={(e) => setCsvText(e.target.value)}
+                    placeholder={"Company Name,Phone Number,City,State,Web Address\n…"}
+                    rows={10}
+                    className="input font-mono"
+                  />
+                  {error && (
+                    <div className="mt-3 flex items-start gap-2 border border-destructive p-3 text-xs text-destructive">
+                      <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" /> {error}
+                    </div>
+                  )}
+                  <div className="mt-4 flex items-center justify-between">
+                    <button onClick={() => setPhase("form")} className="mono ink-link">
+                      [ BACK ]
+                    </button>
+                    <button
+                      onClick={csvProposeMapping}
+                      disabled={!csvText.trim() || csvBusy}
+                      className="mono inline-flex items-center gap-2 px-5 py-2.5 bg-foreground text-background hover:opacity-90 disabled:opacity-50"
+                    >
+                      {csvBusy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} [ MAP COLUMNS ]
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {phase === "csv-map" && csvMapping && (
+                <div className="p-6 overflow-y-auto flex-1">
+                  <p className="mono text-muted-foreground mb-4">
+                    {String(csvRowCount).padStart(3, "0")} rows found. Check the mapping — a blank
+                    website column imports as “No Dedicated Website”.
+                  </p>
+                  <div className="space-y-3">
+                    {CSV_FIELDS.map((f) => (
+                      <Field key={f} label={f === "business" ? "business (required)" : f}>
+                        <select
+                          value={csvMapping[f] ?? ""}
+                          onChange={(e) =>
+                            setCsvMapping((m) => (m ? { ...m, [f]: e.target.value || null } : m))
+                          }
+                          className="input"
+                        >
+                          <option value="">— not in this file —</option>
+                          {csvHeaders.map((h) => (
+                            <option key={h} value={h}>
+                              {h}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                    ))}
+                  </div>
+                  {error && (
+                    <div className="mt-3 flex items-start gap-2 border border-destructive p-3 text-xs text-destructive">
+                      <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" /> {error}
+                    </div>
+                  )}
+                  <div className="mt-5 flex items-center justify-between">
+                    <button onClick={() => setPhase("csv")} className="mono ink-link">
+                      [ BACK ]
+                    </button>
+                    <button
+                      onClick={csvImport}
+                      disabled={!csvMapping.business || csvBusy}
+                      className="mono inline-flex items-center gap-2 px-5 py-2.5 bg-foreground text-background hover:opacity-90 disabled:opacity-50"
+                    >
+                      {csvBusy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} [ IMPORT{" "}
+                      {String(csvRowCount).padStart(3, "0")} ROWS ]
+                    </button>
+                  </div>
                 </div>
               )}
 
               {phase === "enriching" && (
                 <div className="p-6 overflow-y-auto flex-1 space-y-4">
+                  <SourceCounts perSource={perSource} dropped={droppedExisting} />
                   <div className="mono text-foreground">
                     RESEARCHING {String(enrichDone).padStart(2, "0")} /{" "}
                     {String(candidates.length).padStart(2, "0")}
@@ -452,9 +747,11 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
               {phase === "review" && (
                 <>
                   <div className="p-6 pt-4 overflow-y-auto flex-1 space-y-6">
+                    <SourceCounts perSource={perSource} dropped={droppedExisting} />
                     <p className="mono text-muted-foreground">
                       Only VERIFIED leads are pre-selected. PARTIAL and UNVERIFIED candidates can be
-                      imported anyway with an explicit checkbox — read the reason first.
+                      imported anyway with an explicit checkbox — read the reason first. OFF GOOGLE
+                      finds sort first — invisible to competitors searching Google.
                     </p>
                     {verified.length > 0 && (
                       <Section
@@ -517,6 +814,58 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
         </>
       )}
     </AnimatePresence>
+  );
+}
+
+function SourceCounts({
+  perSource,
+  dropped,
+}: {
+  perSource: Record<string, number> | null;
+  dropped: number;
+}) {
+  if (!perSource) return null;
+  const parts = Object.entries(perSource).map(
+    ([id, n]) => `${SHORT_LABEL[id] ?? id.toUpperCase()} ${String(n).padStart(2, "0")}`,
+  );
+  if (!parts.length) return null;
+  return (
+    <div className="mono text-muted-foreground border-b border-border pb-2">
+      FOUND — {parts.join(" · ")}
+      {dropped > 0 && (
+        <span className="text-muted-foreground/70"> · {dropped} already in your book, skipped</span>
+      )}
+    </div>
+  );
+}
+
+function ProvenanceChips({ c }: { c: Candidate }) {
+  const via = c.foundVia ?? [];
+  const hasAny = via.length > 0 || c.offGoogle || c.registeredAt || c.phoneInvalid;
+  if (!hasAny) return null;
+  return (
+    <div className="flex flex-wrap gap-1 mt-2">
+      {c.offGoogle && (
+        <span className="mono border border-[color:var(--sienna)] text-[color:var(--sienna)] px-1.5 py-0.5 font-medium">
+          OFF GOOGLE
+        </span>
+      )}
+      {c.registeredAt && (
+        <span className="mono border border-[color:var(--frog-ink)] text-[color:var(--frog-ink)] px-1.5 py-0.5">
+          NEW — REGISTERED {c.registeredAt}
+        </span>
+      )}
+      {c.phoneInvalid && (
+        <span className="mono border border-[color:var(--sienna)] text-[color:var(--sienna)] px-1.5 py-0.5">
+          BAD PHONE
+        </span>
+      )}
+      {via.map((s) => (
+        <span key={s} className="mono border border-border text-muted-foreground px-1.5 py-0.5">
+          {SHORT_LABEL[s] ?? s.toUpperCase()}
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -584,6 +933,7 @@ function CandidateRow({ c, onToggle }: { c: Candidate; onToggle: (id: string) =>
           </div>
         </div>
         <p className="text-xs text-muted-foreground mt-1">{c.onlinePresence}</p>
+        <ProvenanceChips c={c} />
         {c.unverified && (
           <p className="mono mt-2 text-[color:var(--sienna)]">
             ⚠ {(c.unverifiedReason || "review before importing").toUpperCase()}
