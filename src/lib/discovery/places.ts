@@ -3,7 +3,9 @@
 // discoverCandidates() entry point used by the assistant); the DiscoverySource
 // wrapper adds budgeted multi-query fan-out for the orchestrator.
 
+import { aiExtract, getAI } from "../ai.server";
 import type { PlacesSignals } from "../verification.server";
+import { isKnoxMetro, metroTowns } from "./market";
 import { SourceBudget } from "./types";
 import type { DiscoveredCandidate, DiscoveryQuery, DiscoverySource } from "./types";
 
@@ -322,8 +324,67 @@ export const placesSource: DiscoverySource = {
   },
 };
 
-// Phase 2 replaces this with AI query variants + metro fan-out; for now the
-// source runs the same single query as the legacy path.
+// ── Query fan-out: AI industry variants × metro towns ───────────────────────
+
+/** Max distinct query strings per industry (base + AI variants). */
+export const MAX_QUERY_VARIANTS = 6;
+
+// Variants cached per industry string for the process lifetime — one AI call
+// per industry, ever, per server instance.
+const variantCache = new Map<string, string[]>();
+
+async function industryVariants(industry: string): Promise<string[]> {
+  const key = industry.toLowerCase().trim();
+  const hit = variantCache.get(key);
+  if (hit) return hit;
+
+  let variants: string[] = [];
+  const ai = getAI();
+  if (ai) {
+    try {
+      const res = await aiExtract<{ variants: string[] }>(ai, {
+        system:
+          "You generate Google Maps search query variants for finding local businesses in an industry. Given an industry, return up to 5 short variants: common synonyms and specific service subtypes a small business might list itself under (e.g. plumber → drain cleaning, water heater repair, septic service). No city names, no explanations, just the service terms.",
+        user: industry,
+        toolName: "report_variants",
+        toolDescription: "Report the search query variants",
+        schema: {
+          type: "object",
+          properties: {
+            variants: { type: "array", items: { type: "string" }, maxItems: 5 },
+          },
+          required: ["variants"],
+        },
+        timeoutMs: 12_000,
+      });
+      variants = (res?.variants ?? [])
+        .map((v) => v.trim())
+        .filter((v) => v && v.toLowerCase() !== key)
+        .slice(0, MAX_QUERY_VARIANTS - 1);
+    } catch (err) {
+      console.error("[discovery] variant generation failed (using base query):", err);
+    }
+  }
+  const all = [industry, ...variants].slice(0, MAX_QUERY_VARIANTS);
+  variantCache.set(key, all);
+  return all;
+}
+
+/**
+ * Build the fan-out query list, best-first: every industry variant in the
+ * requested city, then (with expandMetro in the Knox metro) the base industry
+ * across surrounding towns, then remaining variant×town combos. The source
+ * budget caps how many actually run.
+ */
 async function buildQueries(q: DiscoveryQuery): Promise<string[]> {
-  return [`${q.industry} in ${q.city}`];
+  const variants = await industryVariants(q.industry);
+  const queries = variants.map((v) => `${v} in ${q.city}`);
+  if (q.expandMetro && isKnoxMetro(q.city)) {
+    const towns = metroTowns(q.city);
+    for (const t of towns) queries.push(`${variants[0]} in ${t}`);
+    for (const t of towns) {
+      for (const v of variants.slice(1)) queries.push(`${v} in ${t}`);
+    }
+  }
+  return queries;
 }
