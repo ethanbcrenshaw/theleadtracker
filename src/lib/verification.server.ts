@@ -210,6 +210,10 @@ export interface ScoreInput {
   phone?: string;
   tier?: VerificationTier | null;
   signals?: PlacesSignals | null;
+  /** Cross-checked against Places and not found there (multi-source discovery). */
+  offGoogle?: boolean;
+  /** Discovery source ids that independently found this business. */
+  foundVia?: string[] | null;
 }
 
 /**
@@ -255,8 +259,19 @@ export function computeLeadScore(input: ScoreInput): number {
     else if (days <= 365) score += 3;
   }
 
+  // Off-Google finds have no Places signals, so the business-active section
+  // scores 0 for them — don't let absence from Google (the very thing that
+  // makes them good prospects) crater the score. Grant a modest floor when
+  // the lead still shows life signals: a callable phone, or a live page we
+  // found them on. Capped so a dead phone / CLOSED status still dominates.
+  const hasPhone = (input.phone ?? "").replace(/\D/g, "").length >= 7;
+  if (input.offGoogle && s.businessStatus === undefined) {
+    if (hasPhone) score += 12;
+    if (input.tier === "verified" || input.tier === "partial") score += 6;
+  }
+
   // Callable — max 15
-  if ((input.phone ?? "").replace(/\D/g, "").length >= 7) score += 15;
+  if (hasPhone) score += 15;
 
   // Identity verification — max 15
   if (input.tier === "verified") score += 15;
@@ -270,6 +285,8 @@ export interface VerifyInput {
   phone?: string;
   tier?: VerificationTier | null;
   signals?: PlacesSignals | null;
+  offGoogle?: boolean;
+  foundVia?: string[] | null;
 }
 
 /** Full check pass for one lead. Never throws. */
@@ -301,6 +318,8 @@ export async function runVerificationChecks(
     phone: input.phone,
     tier: input.tier,
     signals: input.signals,
+    offGoogle: input.offGoogle,
+    foundVia: input.foundVia,
   });
 
   return { verification, leadScore };

@@ -26,6 +26,8 @@ export const Route = createFileRoute("/api/enrich-candidate")({
           website?: string | null;
           websiteOpportunity?: string;
           placesSignals?: PlacesSignals;
+          offGoogle?: boolean;
+          foundVia?: string[];
         };
         try {
           body = await request.json();
@@ -53,6 +55,8 @@ export const Route = createFileRoute("/api/enrich-candidate")({
             phone: body.phone,
             tier: result.verificationTier,
             signals: body.placesSignals,
+            offGoogle: body.offGoogle,
+            foundVia: body.foundVia,
           });
           return Response.json({ ok: true, result: { ...result, verification, leadScore } });
         } catch (e) {

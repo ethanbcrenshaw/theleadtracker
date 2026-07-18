@@ -71,7 +71,7 @@ type FirecrawlSearchResp = {
   data?: { web?: FirecrawlSearchItem[] } | FirecrawlSearchItem[];
 };
 
-async function firecrawlSearch(
+export async function firecrawlSearch(
   query: string,
   apiKey: string,
   limit = 10,

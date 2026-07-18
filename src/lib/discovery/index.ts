@@ -8,6 +8,7 @@
 // note in the result.
 
 import { runWithConcurrency } from "../enrichment.server";
+import { firecrawlSearchSource } from "./firecrawl-search";
 import { filterAgainstSavedLeads, mergeCandidates, nameKeyOf, phoneKeyOf } from "./merge";
 import { placesLookup, placesSource } from "./places";
 import { SourceBudget } from "./types";
@@ -33,7 +34,8 @@ export const OVERSHOOT_FACTOR = 3;
 
 const REGISTRY: Partial<Record<DiscoverySourceId, DiscoverySource>> = {
   places: placesSource,
-  // firecrawl-search, foursquare, knox-registry register here as they land.
+  "firecrawl-search": firecrawlSearchSource,
+  // foursquare, knox-registry register here as they land.
 };
 
 export function availableSources(): Array<{ id: DiscoverySourceId; configured: boolean }> {

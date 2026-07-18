@@ -49,7 +49,7 @@ const SOCIAL_HOSTS: Record<string, string> = {
   "linktr.ee": "Social-Heavy",
   "linktree.com": "Social-Heavy",
 };
-const DIRECTORY_HOSTS = [
+export const DIRECTORY_HOSTS = [
   "yelp.com",
   "yellowpages.com",
   "mapquest.com",
