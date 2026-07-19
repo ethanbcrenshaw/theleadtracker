@@ -2,7 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import "@tanstack/react-start";
 import { createClient } from "@supabase/supabase-js";
 import { enrichLeadFull, hostOf, runWithConcurrency } from "@/lib/enrichment.server";
-import { discoverCandidates } from "@/lib/discover.server";
+import { runDiscovery, sortForReview } from "@/lib/discovery";
+import { mergeCandidates } from "@/lib/discovery/merge";
+import type { DiscoveredCandidate, DiscoverySourceId } from "@/lib/discovery/types";
 import { runVerificationChecks } from "@/lib/verification.server";
 import {
   aiChat,
@@ -114,13 +116,19 @@ const TOOLS = [
     function: {
       name: "generate_leads",
       description:
-        "Discover + verify new local business leads via Google Places + Firecrawl. Imports verified leads AND Places-vouched partials (operational business, real reviews, strong score) — the same bar the rest of the app trusts. Slow; capped at 8 per call so it finishes reliably. For bigger batches, tell the user to use the [ AI GENERATE ] button instead.",
+        "Discover new local-business leads from MULTIPLE sources (Google Places with AI query fan-out, web search for off-Google businesses, new Knox County filings, Foursquare if configured), dedupe them against the whole book, and queue an enrich-and-import job that runs right in the chat with live progress. NO small batch cap — up to 40 per call, and broad geography is fine: pass several cities. Verified + Places-vouched candidates import automatically; the job posts an honest final report when it finishes.",
       parameters: {
         type: "object",
         properties: {
           industry: { type: "string" },
-          city: { type: "string", description: "e.g. 'Franklin, TN'" },
-          count: { type: "number", description: "1-8 (capped at 8)" },
+          cities: {
+            type: "array",
+            items: { type: "string" },
+            description:
+              "1-4 'City, ST' strings. Translate regions into real cities yourself (e.g. 'East Tennessee' → ['Knoxville, TN','Maryville, TN','Sevierville, TN']).",
+          },
+          city: { type: "string", description: "Single city — legacy alias for cities." },
+          count: { type: "number", description: "TOTAL leads wanted across all cities, 1-40." },
           type: {
             type: "string",
             enum: [
@@ -134,10 +142,22 @@ const TOOLS = [
           },
           include_partial: {
             type: "boolean",
-            description: "Also import partial-tier candidates. Default false.",
+            description: "Also import plain partial-tier candidates. Default false.",
+          },
+          expand_metro: {
+            type: "boolean",
+            description: "Fan across Knoxville's surrounding towns (Knox-metro cities only).",
+          },
+          sources: {
+            type: "array",
+            items: {
+              type: "string",
+              enum: ["places", "firecrawl-search", "foursquare", "knox-registry"],
+            },
+            description: "Restrict discovery sources. Default: all configured.",
           },
         },
-        required: ["industry", "city", "count"],
+        required: ["industry", "count"],
       },
     },
   },
@@ -328,6 +348,52 @@ type PendingAction =
     }
   | { kind: "update"; ids: string[]; changes: Record<string, unknown>; preview: string };
 
+// Every discovery source the assistant may fan across (filtered to configured
+// sources inside runDiscovery).
+const ALL_SOURCE_IDS: DiscoverySourceId[] = [
+  "places",
+  "firecrawl-search",
+  "foursquare",
+  "knox-registry",
+];
+
+/**
+ * A queued enrich-and-import run. Discovery happens server-side (fast); the
+ * assistant page executes the slow part with live progress — one
+ * /api/enrich-candidate call per candidate — so batch size has no serverless
+ * ceiling. Persisted in pending_action so reloaded chats can re-run it.
+ */
+export type GenerateJob = {
+  kind: "generate";
+  id: string;
+  industry: string;
+  type: string;
+  includePartial: boolean;
+  targetCount: number;
+  cities: string[];
+  candidates: Array<
+    Pick<
+      DiscoveredCandidate,
+      | "business"
+      | "city"
+      | "state"
+      | "phone"
+      | "owner"
+      | "sourceUrl"
+      | "website"
+      | "sources"
+      | "onlinePresence"
+      | "websiteOpportunity"
+      | "matchesFilter"
+      | "placesSignals"
+      | "foundVia"
+      | "offGoogle"
+      | "registeredAt"
+      | "phoneInvalid"
+    >
+  >;
+};
+
 type StepEvent =
   | { type: "tool_call"; name: string; args: Record<string, unknown>; label: string }
   | { type: "tool_result"; name: string; label: string; ok: boolean; summary: string };
@@ -416,7 +482,13 @@ async function executeTool(
   name: string,
   args: Record<string, unknown>,
   deps: { sb: Sb; origin: string },
-): Promise<{ result: unknown; label: string; summary: string; pending?: PendingAction }> {
+): Promise<{
+  result: unknown;
+  label: string;
+  summary: string;
+  pending?: PendingAction;
+  job?: GenerateJob;
+}> {
   const sb = deps.sb;
 
   if (name === "query_leads") {
@@ -458,161 +530,123 @@ async function executeTool(
   }
 
   if (name === "generate_leads") {
-    const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-    const firecrawlKey = process.env.FIRECRAWL_API_KEY;
-    const ai = getAI();
-    if (!apiKey || !firecrawlKey)
+    if (!process.env.GOOGLE_PLACES_API_KEY && !process.env.FIRECRAWL_API_KEY)
       return {
-        result: { error: "Missing API keys" },
+        result: { error: "No discovery keys configured" },
         label: "→ generate_leads",
         summary: "config missing",
       };
-    const industry = String(args.industry);
-    const city = String(args.city);
-    // Cap conversational generation small so it finishes inside the serverless
-    // window; the [ AI GENERATE ] button handles big batches without this limit.
-    const count = Math.max(1, Math.min(8, Number(args.count) || 5));
+    const industry = String(args.industry || "").trim();
+    const rawCities =
+      Array.isArray(args.cities) && args.cities.length
+        ? (args.cities as unknown[]).map(String)
+        : args.city
+          ? [String(args.city)]
+          : [];
+    const cities = rawCities
+      .map((c) => c.trim())
+      .filter(Boolean)
+      .slice(0, 4);
+    if (!industry || !cities.length)
+      return {
+        result: { error: "industry and at least one city required" },
+        label: "→ generate_leads",
+        summary: "missing industry/city",
+      };
+    const count = Math.max(1, Math.min(40, Number(args.count) || 10));
     const type = String(args.type || "No Dedicated Website");
     const includePartial = Boolean(args.include_partial);
-    const label = `→ generating ${count} ${industry} leads in ${city}…`;
+    const expandMetro = Boolean(args.expand_metro);
+    const requestedSources =
+      Array.isArray(args.sources) && args.sources.length
+        ? ((args.sources as unknown[]).map(String) as DiscoverySourceId[])
+        : undefined;
+    const label = `→ discovering ${industry} across ${cities.join(" · ")}…`;
 
-    const candidates = await discoverCandidates({ industry, city, count, type, apiKey });
-    // Skip existing (by phone + name).
-    const { data: existing } = await sb
-      .from("leads")
-      .select("business,phone")
-      .is("deleted_at", null);
-    const seenNames = new Set(
-      (existing ?? []).map((l: { business?: string }) => normalizeName(l.business ?? "")),
-    );
-    const seenPhones = new Set(
-      (existing ?? [])
-        .map((l: { phone?: string }) => (l.phone ?? "").replace(/\D/g, ""))
-        .filter(Boolean),
-    );
-    const filtered = candidates
-      .filter((c) => {
-        if (seenNames.has(normalizeName(c.business))) return false;
-        const ph = c.phone.replace(/\D/g, "");
-        if (ph && seenPhones.has(ph)) return false;
-        return true;
-      })
-      .slice(0, count);
+    // Discovery only — fast, wall-clock-budgeted so the request always
+    // returns inside the serverless window. The slow part (enrichment +
+    // import) runs client-side as a chat job with live progress, so there is
+    // NO batch-size cap anymore.
+    const DISCOVERY_BUDGET_MS = 40_000;
+    const startedAt = Date.now();
+    const perCity: Record<string, number> = {};
+    const perSource: Record<string, number> = {};
+    const notes: string[] = [];
+    const lists: DiscoveredCandidate[][] = [];
+    const perCityCount = Math.ceil(count / cities.length);
 
-    // Enrich + verify each concurrently.
-    const enriched: Array<{
-      cand: (typeof filtered)[number];
-      enr: Awaited<ReturnType<typeof enrichLeadFull>> | null;
-      checks: Awaited<ReturnType<typeof runVerificationChecks>> | null;
-    }> = [];
-    await runWithConcurrency(filtered, 3, async (cand) => {
-      try {
-        const enr = await enrichLeadFull(
-          {
-            business: cand.business,
-            city: cand.city,
-            state: cand.state,
-            phone: cand.phone,
-            website: cand.website,
-            websiteOpportunity: cand.websiteOpportunity,
-          },
-          { firecrawlKey, ai },
-        );
-        const checks = await runVerificationChecks({
-          website: cand.website,
-          phone: cand.phone,
-          tier: enr.verificationTier,
-          signals: cand.placesSignals,
-        });
-        enriched.push({ cand, enr, checks });
-      } catch {
-        enriched.push({ cand, enr: null, checks: null });
+    for (let i = 0; i < cities.length; i++) {
+      const remaining = DISCOVERY_BUDGET_MS - (Date.now() - startedAt);
+      if (remaining < 4000) {
+        notes.push(`stopped before ${cities[i]} — discovery time budget spent`);
+        break;
       }
-    });
-
-    // Import verified leads, Places-vouched partials (the standard the Today
-    // queue and batch importer already trust), and — only if explicitly asked —
-    // any remaining partials.
-    const toImport = enriched.filter(
-      ({ enr, checks }) =>
-        enr &&
-        (enr.verificationTier === "verified" ||
-          placesVouched(enr, checks) ||
-          (includePartial && enr.verificationTier === "partial")),
-    );
-    let basePriority = 0;
-    const { data: maxRow } = await sb
-      .from("leads")
-      .select("priority")
-      .order("priority", { ascending: false })
-      .limit(1);
-    if (maxRow && maxRow[0]) basePriority = (maxRow[0] as { priority: number }).priority + 1;
-
-    const rows = toImport.map(({ cand, enr, checks }, i) => {
-      const opp =
-        enr!.enrichment.websiteStatus === "none"
-          ? "No Dedicated Website"
-          : enr!.enrichment.websiteStatus === "outdated"
-            ? "Outdated Website"
-            : cand.websiteOpportunity;
-      const quality =
-        opp === "Has Website" ? "Low" : opp === "Outdated Website" ? "Medium" : "High";
-      return {
-        id: crypto.randomUUID(),
-        priority: basePriority + i,
-        business: cand.business,
-        city: cand.city,
-        state: cand.state,
-        phone: cand.phone,
-        onlinePresence: cand.onlinePresence,
-        websiteOpportunity: opp,
-        quality,
-        status: "Not Called",
-        sources: cand.sources.length ? cand.sources : ["Other"],
-        notes: cand.sourceUrl
-          ? `Discovered via: ${cand.sourceUrl}`
-          : "Discovered via AI assistant.",
-        tags: ["ai-found", "assistant"],
-        history: [],
-        enrichment: enr!.enrichment,
-        confidenceScore: enr!.confidenceScore,
-        confidenceEvidence: enr!.confidenceEvidence,
-        unverified: enr!.unverified,
-        unverifiedReason: enr!.unverifiedReason ?? null,
-        verificationTier: enr!.verificationTier,
-        verificationReasons: enr!.verificationReasons,
-        verification: checks?.verification ?? null,
-        leadScore: checks?.leadScore ?? null,
-      };
-    });
-    if (rows.length) {
-      const { error } = await sb.from("leads").insert(rows);
-      if (error)
-        return {
-          result: { error: error.message },
-          label,
-          summary: `insert failed: ${error.message}`,
-        };
+      // Slow off-Google sources run for the first city only on multi-city
+      // sweeps; Places (fast) covers every city.
+      const sources = (requestedSources ?? ALL_SOURCE_IDS).filter((s) => i === 0 || s === "places");
+      const res = await runDiscovery(
+        { industry, city: cities[i], count: perCityCount, type, expandMetro },
+        { sources, timeBudgetMs: remaining },
+      );
+      lists.push(res.candidates);
+      perCity[cities[i]] = res.candidates.length;
+      for (const [k, v] of Object.entries(res.perSource)) perSource[k] = (perSource[k] ?? 0) + v;
+      notes.push(...res.notes);
     }
 
-    const verifiedN = enriched.filter((e) => e.enr?.verificationTier === "verified").length;
-    const partialN = enriched.filter((e) => e.enr?.verificationTier === "partial").length;
-    const unverifiedN = enriched.filter((e) => e.enr?.verificationTier === "unverified").length;
-    const vouchedN = enriched.filter((e) => e.enr && placesVouched(e.enr, e.checks)).length;
-    const failedN = enriched.filter((e) => !e.enr).length;
-    const summary = `discovered ${candidates.length}, deduped to ${filtered.length}, verified ${verifiedN}${vouchedN ? ` + ${vouchedN} Places-vouched` : ""} · partial ${partialN} · unverified ${unverifiedN}${failedN ? ` · errors ${failedN}` : ""} — imported ${rows.length}`;
+    // Cross-city merge (a business discovered from two nearby cities is one
+    // lead), then queue up to 2× the target — enrichment rejects some, and
+    // the client stops importing once the target is reached.
+    const merged = sortForReview(mergeCandidates(lists));
+    const queued = merged.slice(0, Math.min(count * 2, 60));
+    const offGoogleN = queued.filter((c) => c.offGoogle).length;
+
+    const job: GenerateJob = {
+      kind: "generate",
+      id: crypto.randomUUID(),
+      industry,
+      type,
+      includePartial,
+      targetCount: count,
+      cities,
+      candidates: queued.map((c) => ({
+        business: c.business,
+        city: c.city,
+        state: c.state,
+        phone: c.phone,
+        owner: c.owner,
+        sourceUrl: c.sourceUrl,
+        website: c.website,
+        sources: c.sources,
+        onlinePresence: c.onlinePresence,
+        websiteOpportunity: c.websiteOpportunity,
+        matchesFilter: c.matchesFilter,
+        placesSignals: c.placesSignals,
+        foundVia: c.foundVia,
+        offGoogle: c.offGoogle,
+        registeredAt: c.registeredAt,
+        phoneInvalid: c.phoneInvalid,
+      })),
+    };
+
+    const summary = `queued ${queued.length} candidates toward ${count} imports (${Object.entries(
+      perCity,
+    )
+      .map(([c, n]) => `${c.split(",")[0]} ${n}`)
+      .join(" · ")})${offGoogleN ? ` · ${offGoogleN} off-Google` : ""}`;
     return {
       result: {
-        imported: rows.length,
-        verified: verifiedN,
-        placesVouched: vouchedN,
-        partial: partialN,
-        unverified: unverifiedN,
-        errors: failedN,
-        sample: rows.slice(0, 5).map((r) => r.business),
+        queuedCandidates: queued.length,
+        targetImports: count,
+        perCity,
+        perSource,
+        offGoogle: offGoogleN,
+        notes,
+        note: "An enrich-and-import job card is now running in this chat with live progress. Do NOT claim leads are imported — say the run is underway below and its report will follow.",
       },
       label,
       summary,
+      job,
     };
   }
 
@@ -990,7 +1024,9 @@ Voice: warm, editorial, and BRIEF. Default to 1–3 short sentences; lead with t
 Rules:
 - Ground EVERY claim in a tool result. Never say you did something unless the tool result confirms it. If a tool returned an error, a zero count, or a warning field, report that plainly — do not smooth it over or claim success. Honesty about a failure is far better than a false "done".
 - Prefer query_leads to answer questions about the user's book. Report actual counts.
-- Use generate_leads for SMALL conversational batches (it caps at 8 so it finishes reliably). If the user wants more than ~8 at once, tell them to use the [ AI GENERATE ] button in the header — it handles big batches without timing out. It imports verified + Places-vouched leads by default; report the imported count and the split honestly, and if 0 imported, say so and suggest a different city/segment.
+- generate_leads has NO small batch cap: up to 40 per call (run it again for more). It discovers from every configured source (Google Places with AI query variants, web search for off-Google businesses, new Knox County filings, Foursquare), dedupes against the whole book, and queues an enrich-and-import job that runs RIGHT IN THIS CHAT with live progress and a final report.
+- Broad geography is yours to translate: a region becomes 2-4 concrete cities you choose ("East Tennessee" → Knoxville, Maryville, Sevierville; "Middle TN" → Nashville, Franklin, Murfreesboro; "Pacific stock" → Portland OR, Seattle WA, Sacramento CA). Never refuse a broad ask — pick real cities and say which you picked and why. For Knoxville-area asks, set expand_metro to sweep the surrounding towns.
+- After calling generate_leads, do NOT claim leads are imported. The tool result reports what was QUEUED; say the import is running below with live progress and the final report will follow. If 0 candidates were queued, say so and suggest a different segment, city, or source mix.
 - update_leads: follow-up dates can be natural language ("next Monday", "in 2 weeks", "August") — the tool normalizes them. If a tool result includes followUpWarning, the date could NOT be saved; tell the user and ask for a concrete date rather than claiming the follow-up is set.
 - reverify_leads for freshness passes. Summarize what changed.
 - delete_leads and bulk update_leads (>5) return a confirmation card — do not describe the action as done. Say something like "I've queued it — confirm on the card below." Only after the user confirms does it execute.
@@ -1069,6 +1105,7 @@ export const Route = createFileRoute("/api/assistant")({
 
         const steps: StepEvent[] = [];
         let pendingAction: PendingAction | null = null;
+        let generateJob: GenerateJob | null = null;
         let finalReply = "";
 
         try {
@@ -1093,7 +1130,7 @@ export const Route = createFileRoute("/api/assistant")({
                 /* ignore */
               }
               try {
-                const { result, label, summary, pending } = await executeTool(
+                const { result, label, summary, pending, job } = await executeTool(
                   call.function.name,
                   args,
                   { sb, origin },
@@ -1107,6 +1144,7 @@ export const Route = createFileRoute("/api/assistant")({
                   summary,
                 });
                 if (pending && !pendingAction) pendingAction = pending;
+                if (job && !generateJob) generateJob = job;
                 messages.push({
                   role: "tool",
                   tool_call_id: call.id,
@@ -1157,7 +1195,9 @@ export const Route = createFileRoute("/api/assistant")({
                 role: "assistant",
                 content: finalReply,
                 tool_calls: steps as unknown,
-                pending_action: pendingAction as unknown,
+                // Jobs share the pending_action column so reloaded chats can
+                // re-run an un-run import.
+                pending_action: (pendingAction ?? generateJob) as unknown,
               },
             ];
             const withThread = body.conversationId
@@ -1168,7 +1208,7 @@ export const Route = createFileRoute("/api/assistant")({
               await sb.from("assistant_messages").insert(rows);
             }
           }
-          return Response.json({ reply: finalReply, steps, pendingAction });
+          return Response.json({ reply: finalReply, steps, pendingAction, generateJob });
         } catch (e) {
           const msg = e instanceof Error ? e.message : "unknown error";
           return Response.json({ error: msg, steps }, { status: 500 });

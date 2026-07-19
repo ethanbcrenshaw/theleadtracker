@@ -508,7 +508,7 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
                       <input
                         type="number"
                         min={1}
-                        max={15}
+                        max={40}
                         value={count}
                         onChange={(e) => setCount(+e.target.value)}
                         className="input"

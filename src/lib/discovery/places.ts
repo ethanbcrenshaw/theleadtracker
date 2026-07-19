@@ -329,14 +329,26 @@ export const placesSource: DiscoverySource = {
 /** Max distinct query strings per industry (base + AI variants). */
 export const MAX_QUERY_VARIANTS = 6;
 
-// Variants cached per industry string for the process lifetime — one AI call
-// per industry, ever, per server instance.
+// Variants cached in-process AND persisted via the settings store, so
+// serverless cold starts don't re-pay the AI call for an industry we've
+// already expanded. DB failures fall through silently to the AI path.
 const variantCache = new Map<string, string[]>();
 
 async function industryVariants(industry: string): Promise<string[]> {
   const key = industry.toLowerCase().trim();
   const hit = variantCache.get(key);
   if (hit) return hit;
+
+  try {
+    const { getSettingServer } = await import("../settings.server");
+    const stored = await getSettingServer<string[]>(`discovery.variants.${key}`);
+    if (Array.isArray(stored) && stored.length) {
+      variantCache.set(key, stored);
+      return stored;
+    }
+  } catch {
+    /* settings store unavailable — fall through to AI */
+  }
 
   let variants: string[] = [];
   const ai = getAI();
@@ -367,6 +379,14 @@ async function industryVariants(industry: string): Promise<string[]> {
   }
   const all = [industry, ...variants].slice(0, MAX_QUERY_VARIANTS);
   variantCache.set(key, all);
+  if (variants.length) {
+    try {
+      const { setSettingServer } = await import("../settings.server");
+      await setSettingServer(`discovery.variants.${key}`, all);
+    } catch {
+      /* persistence is best-effort */
+    }
+  }
   return all;
 }
 

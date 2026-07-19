@@ -41,7 +41,9 @@ export const Route = createFileRoute("/api/generate-leads")({
         }
         const industry = (body.industry || "upholstery").trim();
         const city = (body.city || "Nashville, TN").trim();
-        const count = Math.max(1, Math.min(15, body.count || 5));
+        // Enrichment happens client-side per candidate, so big batches are
+        // safe — the cap only bounds discovery fan-out.
+        const count = Math.max(1, Math.min(40, body.count || 5));
         const type = body.type || "No Dedicated Website";
 
         try {

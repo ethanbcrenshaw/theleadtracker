@@ -3,6 +3,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Mic, Paperclip, Plus, Send, Trash2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useLeads } from "@/lib/store";
+import { qualityFromOpportunity } from "@/lib/crm-utils";
+import type {
+  Lead,
+  LeadEnrichment,
+  LeadSource,
+  LeadVerification,
+  VerificationTier,
+  WebsiteOpportunity,
+} from "@/lib/types";
 import { BloomFlower } from "@/components/crm/BloomFlower";
 import { Wordmark } from "@/components/crm/Wordmark";
 import { webSpeechProvider } from "@/lib/transcription/webspeech";
@@ -37,6 +46,54 @@ type PendingAction =
   | { kind: "delete"; scope: string; ids: string[]; requireTyped?: boolean; preview: string }
   | { kind: "update"; ids: string[]; changes: Record<string, unknown>; preview: string };
 
+// A queued enrich-and-import run from generate_leads. Discovery happened
+// server-side; this page executes the slow part (one /api/enrich-candidate
+// call per candidate) with live progress — so batch size has no serverless
+// ceiling.
+type JobCandidate = {
+  business: string;
+  city: string;
+  state: string;
+  phone: string;
+  owner: string | null;
+  sourceUrl: string | null;
+  website: string | null;
+  sources: string[];
+  onlinePresence: string;
+  websiteOpportunity: string;
+  matchesFilter: boolean;
+  placesSignals?: {
+    businessStatus?: string;
+    rating?: number;
+    reviewCount?: number;
+    lastReviewAt?: string;
+  };
+  foundVia?: string[];
+  offGoogle?: boolean;
+  registeredAt?: string;
+  phoneInvalid?: boolean;
+};
+
+type GenerateJob = {
+  kind: "generate";
+  id: string;
+  industry: string;
+  type: string;
+  includePartial: boolean;
+  targetCount: number;
+  cities: string[];
+  candidates: JobCandidate[];
+};
+
+type JobProgress = {
+  status: "running" | "done" | "cancelled";
+  done: number;
+  imported: number;
+  skipped: number;
+  errors: number;
+  current?: string;
+};
+
 type Msg = {
   id: string;
   role: "user" | "assistant";
@@ -44,8 +101,54 @@ type Msg = {
   createdAt?: string;
   steps?: Step[];
   pending?: PendingAction | null;
+  job?: GenerateJob | null;
   executed?: { ok: boolean; count: number; kind: string } | null;
 };
+
+const ALLOWED_SOURCES: LeadSource[] = [
+  "Yelp",
+  "Facebook",
+  "Google Business",
+  "Angie's List",
+  "MapQuest",
+  "Website",
+  "Instagram",
+  "Houzz",
+  "Directory",
+  "Other",
+];
+const ALLOWED_OPP: WebsiteOpportunity[] = [
+  "No Dedicated Website",
+  "Facebook Only",
+  "Yelp/Directory Only",
+  "Outdated Website",
+  "Has Website",
+  "Social-Heavy",
+];
+
+type EnrichResult = {
+  enrichment?: LeadEnrichment;
+  confidenceScore?: number;
+  confidenceEvidence?: string[];
+  unverified?: boolean;
+  unverifiedReason?: string;
+  verificationTier?: VerificationTier;
+  verificationReasons?: string[];
+  verification?: LeadVerification;
+  leadScore?: number;
+};
+
+// Same bar the rest of the app trusts: a partial-tier lead Google Places
+// itself stands behind.
+function placesVouchedClient(r: EnrichResult): boolean {
+  const biz = r.verification?.business;
+  return (
+    r.verificationTier === "partial" &&
+    (r.leadScore ?? 0) >= 70 &&
+    biz?.businessStatus === "OPERATIONAL" &&
+    (biz?.reviewCount ?? 0) >= 1
+  );
+}
 
 type Thread = {
   id: string; // conversation_id, or "legacy" for pre-thread rows
@@ -112,7 +215,7 @@ type DbRow = {
   created_at: string;
   conversation_id?: string | null;
   tool_calls: Step[] | null;
-  pending_action: PendingAction | null;
+  pending_action: PendingAction | GenerateJob | null;
 };
 
 export const Route = createFileRoute("/assistant")({
@@ -124,6 +227,7 @@ export const Route = createFileRoute("/assistant")({
 
 function AssistantPage() {
   const refresh = useLeads((s) => s.refresh);
+  const addLeads = useLeads((s) => s.addLeads);
 
   // History: one fetch of all chat rows; threads + active messages derive from it.
   const [rows, setRows] = useState<DbRow[]>([]);
@@ -136,6 +240,9 @@ function AssistantPage() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Live enrich-and-import jobs, keyed by job id.
+  const [jobProgress, setJobProgress] = useState<Record<string, JobProgress>>({});
+  const cancelledJobs = useRef<Set<string>>(new Set());
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [dragOver, setDragOver] = useState(false);
   // Starts true on both server and client, then syncs from localStorage after
@@ -235,6 +342,8 @@ function AssistantPage() {
         steps: r.tool_calls ?? undefined,
         // Historical pending cards are stale — never re-executable after reload.
         pending: null,
+        // Import jobs ARE re-runnable after reload (dedupe guards repeats).
+        job: r.pending_action?.kind === "generate" ? (r.pending_action as GenerateJob) : null,
       }));
     return [...fromDb, ...(localMsgs[activeId] ?? [])];
   }, [rows, localMsgs, activeId]);
@@ -407,9 +516,12 @@ function AssistantPage() {
             content: j.reply || "",
             steps: j.steps,
             pending: j.pendingAction ?? null,
+            job: j.generateJob ?? null,
           },
         ],
       }));
+      // A freshly queued import runs immediately — progress shows on its card.
+      if (j.generateJob) void runJob(convo, j.generateJob as GenerateJob);
       void refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Request failed");
@@ -457,6 +569,175 @@ function AssistantPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  // ── Enrich-and-import job runner ──────────────────────────────────────────
+  // Discovery already happened server-side; this walks the queued candidates
+  // through /api/enrich-candidate (concurrency 3), imports the ones that meet
+  // the bar as they pass (leads appear in the book live), and posts an honest
+  // summary into the conversation when it finishes.
+  async function runJob(convo: string, job: GenerateJob) {
+    if (jobProgress[job.id]?.status === "running") return;
+    cancelledJobs.current.delete(job.id);
+    const bump = (patch: Partial<JobProgress>) =>
+      setJobProgress((p) => ({
+        ...p,
+        [job.id]: {
+          ...(p[job.id] ?? { status: "running", done: 0, imported: 0, skipped: 0, errors: 0 }),
+          ...patch,
+        },
+      }));
+    bump({ status: "running", done: 0, imported: 0, skipped: 0, errors: 0 });
+
+    // Dedupe against the book as it stands right now — re-running a job (or a
+    // parallel import) can never create duplicates.
+    const startLeads = useLeads.getState().leads;
+    const seenNames = new Set(startLeads.map((l) => l.business.toLowerCase().trim()));
+    const seenPhones = new Set(
+      startLeads.map((l) => (l.phone || "").replace(/\D/g, "")).filter(Boolean),
+    );
+
+    let done = 0;
+    let imported = 0;
+    let skipped = 0;
+    let errors = 0;
+    let verifiedN = 0;
+    let vouchedN = 0;
+
+    let i = 0;
+    const workers = Array.from({ length: 3 }, async () => {
+      while (i < job.candidates.length) {
+        if (cancelledJobs.current.has(job.id) || imported >= job.targetCount) return;
+        const cand = job.candidates[i++];
+        bump({ current: cand.business });
+        const nameKey = cand.business.toLowerCase().trim();
+        const phoneKey = (cand.phone || "").replace(/\D/g, "");
+        if (seenNames.has(nameKey) || (phoneKey && seenPhones.has(phoneKey))) {
+          skipped++;
+          done++;
+          bump({ done, skipped });
+          continue;
+        }
+        try {
+          const r = await fetch("/api/enrich-candidate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              business: cand.business,
+              city: cand.city,
+              state: cand.state,
+              phone: cand.phone,
+              website: cand.website,
+              websiteOpportunity: cand.websiteOpportunity,
+              placesSignals: cand.placesSignals,
+              offGoogle: cand.offGoogle,
+              foundVia: cand.foundVia,
+            }),
+          });
+          const j = await r.json();
+          if (!r.ok || !j.ok) throw new Error(j.error || `enrich ${r.status}`);
+          const res: EnrichResult = j.result;
+          const vouched = placesVouchedClient(res);
+          const accept =
+            res.verificationTier === "verified" ||
+            vouched ||
+            (job.includePartial && res.verificationTier === "partial");
+          if (accept && imported < job.targetCount && !cancelledJobs.current.has(job.id)) {
+            if (res.verificationTier === "verified") verifiedN++;
+            else if (vouched) vouchedN++;
+            const ws = res.enrichment?.websiteStatus;
+            const oppRaw =
+              ws === "none" && cand.website
+                ? "No Dedicated Website"
+                : ws === "outdated"
+                  ? "Outdated Website"
+                  : cand.websiteOpportunity;
+            const opp = (ALLOWED_OPP as string[]).includes(oppRaw)
+              ? (oppRaw as WebsiteOpportunity)
+              : "No Dedicated Website";
+            const sources = (cand.sources || []).filter((s): s is LeadSource =>
+              (ALLOWED_SOURCES as string[]).includes(s),
+            );
+            const basePriority =
+              useLeads.getState().leads.reduce((m, l) => Math.max(m, l.priority), 0) + 1;
+            const lead: Lead = {
+              id: crypto.randomUUID(),
+              priority: basePriority,
+              business: cand.business,
+              city: cand.city,
+              state: cand.state,
+              phone: cand.phone,
+              owner: cand.owner || undefined,
+              ownerSource: cand.sourceUrl || undefined,
+              onlinePresence: cand.onlinePresence || "Discovered via assistant",
+              websiteOpportunity: opp,
+              quality: qualityFromOpportunity(opp),
+              status: "Not Called",
+              sources: sources.length ? sources : ["Other"],
+              notes: cand.sourceUrl
+                ? `Discovered via: ${cand.sourceUrl}`
+                : "Discovered via AI assistant.",
+              tags: ["ai-found", "assistant"],
+              history: [],
+              enrichment: res.enrichment,
+              confidenceScore: res.confidenceScore,
+              confidenceEvidence: res.confidenceEvidence,
+              unverified: res.unverified,
+              unverifiedReason: res.unverifiedReason,
+              verificationTier: res.verificationTier,
+              verificationReasons: res.verificationReasons,
+              verification: res.verification,
+              leadScore: res.leadScore,
+              foundVia: cand.foundVia,
+            };
+            seenNames.add(nameKey);
+            if (phoneKey) seenPhones.add(phoneKey);
+            addLeads([lead]);
+            imported++;
+          } else if (!accept) {
+            skipped++;
+          }
+          done++;
+          bump({ done, imported, skipped });
+        } catch {
+          errors++;
+          done++;
+          bump({ done, errors });
+        }
+      }
+    });
+    await Promise.all(workers);
+
+    const wasCancelled = cancelledJobs.current.has(job.id);
+    bump({
+      status: wasCancelled ? "cancelled" : "done",
+      current: undefined,
+      done,
+      imported,
+      skipped,
+      errors,
+    });
+
+    const summary = wasCancelled
+      ? `Import cancelled — ${imported} lead${imported === 1 ? "" : "s"} made it in before stopping.`
+      : `Imported ${imported} of ${job.targetCount} — ${verifiedN} verified, ${vouchedN} Places-vouched. ${skipped} skipped (dupes or below the bar)${errors ? `, ${errors} error${errors === 1 ? "" : "s"}` : ""}.${
+          imported < job.targetCount && !wasCancelled
+            ? " Say the word and I'll widen the net — more cities or sources."
+            : ""
+        }`;
+    setLocalMsgs((m) => ({
+      ...m,
+      [convo]: [
+        ...(m[convo] ?? []),
+        { id: crypto.randomUUID(), role: "assistant", content: summary },
+      ],
+    }));
+    const row = { role: "assistant", content: summary };
+    const { error: insErr } = await sb
+      .from("assistant_messages")
+      .insert([convo === LEGACY_ID ? row : { ...row, conversation_id: convo }]);
+    if (insErr && convo !== LEGACY_ID) await sb.from("assistant_messages").insert([row]);
+    void refresh();
   }
 
   function cancelPending(msgId: string) {
@@ -665,6 +946,14 @@ function AssistantPage() {
                         busy={busy}
                       />
                     )}
+                    {m.job && (
+                      <JobCard
+                        job={m.job}
+                        progress={jobProgress[m.job.id]}
+                        onRun={() => activeId && void runJob(activeId, m.job!)}
+                        onCancel={() => cancelledJobs.current.add(m.job!.id)}
+                      />
+                    )}
                     {m.executed && (
                       <div className="mono text-muted-foreground">
                         {m.executed.kind === "cancelled"
@@ -817,6 +1106,87 @@ function AssistantPage() {
           </div>
         </div>
       </main>
+    </div>
+  );
+}
+
+function JobCard({
+  job,
+  progress,
+  onRun,
+  onCancel,
+}: {
+  job: GenerateJob;
+  progress?: JobProgress;
+  onRun: () => void;
+  onCancel: () => void;
+}) {
+  const total = job.candidates.length;
+  const towns = job.cities.map((c) => c.split(",")[0]).join(" · ");
+  return (
+    <div className="border border-border bg-card p-4 space-y-3">
+      <div className="mono text-foreground flex items-center justify-between gap-3 flex-wrap">
+        <span>
+          IMPORT RUN — {String(job.targetCount).padStart(2, "0")} {job.industry.toUpperCase()}
+        </span>
+        <span className="text-muted-foreground">{towns}</span>
+      </div>
+      {!progress && (
+        <div className="space-y-2">
+          <div className="mono text-muted-foreground">
+            {String(total).padStart(2, "0")} candidates queued — not yet enriched.
+          </div>
+          <button
+            onClick={onRun}
+            className="mono border border-foreground px-3 py-1.5 hover:bg-foreground hover:text-background"
+          >
+            [ RUN IMPORT ]
+          </button>
+        </div>
+      )}
+      {progress && (
+        <div className="space-y-2">
+          <div className="h-px bg-border">
+            <div
+              className="h-px bg-[color:var(--frog)] transition-all"
+              style={{ width: `${total ? (progress.done / total) * 100 : 0}%` }}
+            />
+          </div>
+          <div className="mono text-muted-foreground flex items-center gap-3 flex-wrap">
+            <span>
+              {String(progress.done).padStart(2, "0")} / {String(total).padStart(2, "0")}
+            </span>
+            <span className="text-[color:var(--frog-ink)]">
+              IMPORTED {String(progress.imported).padStart(2, "0")}
+            </span>
+            <span>SKIPPED {String(progress.skipped).padStart(2, "0")}</span>
+            {progress.errors > 0 && (
+              <span className="text-[color:var(--sienna)]">
+                ERRORS {String(progress.errors).padStart(2, "0")}
+              </span>
+            )}
+            {progress.status === "running" && progress.current && (
+              <span className="truncate max-w-[16rem]">— {progress.current}</span>
+            )}
+          </div>
+          {progress.status === "running" && (
+            <div className="flex items-center gap-4">
+              <span className="mono text-muted-foreground/70 flex items-center gap-2">
+                <Loader2 className="h-3 w-3 animate-spin" /> keep this page open while it runs
+              </span>
+              <button onClick={onCancel} className="mono ink-link">
+                [ CANCEL ]
+              </button>
+            </div>
+          )}
+          {progress.status === "done" && (
+            <div className="mono text-muted-foreground">— run complete —</div>
+          )}
+          {progress.status === "cancelled" && (
+            <div className="mono text-muted-foreground">— cancelled —</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

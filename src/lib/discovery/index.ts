@@ -78,16 +78,23 @@ function placesMatchesCandidate(
 async function crossCheckOffGoogle(
   candidates: DiscoveredCandidate[],
   notes: string[],
+  outOfTime: () => boolean,
 ): Promise<void> {
-  const targets = candidates.filter(
-    (c) => !c.foundVia.includes("places") && c.offGoogle === undefined,
-  );
+  // Spend the capped lookups on the likeliest gold first: filter matches,
+  // then phone-bearing candidates, then the rest.
+  const targets = candidates
+    .filter((c) => !c.foundVia.includes("places") && c.offGoogle === undefined)
+    .sort(
+      (a, b) =>
+        Number(b.matchesFilter) - Number(a.matchesFilter) ||
+        Number(Boolean(b.phone)) - Number(Boolean(a.phone)),
+    );
   if (!targets.length) return;
   if (!placesSource.isConfigured()) {
     notes.push("off-Google cross-check skipped — GOOGLE_PLACES_API_KEY missing");
     return;
   }
-  const budget = new SourceBudget(CROSSCHECK_CALL_BUDGET);
+  const budget = new SourceBudget(CROSSCHECK_CALL_BUDGET, outOfTime);
   await runWithConcurrency(targets, 3, async (cand) => {
     const results = await placesLookup(`"${cand.business}" ${cand.city}`, budget);
     if (results === null) return; // budget exhausted or error — unknown, not off-Google
@@ -98,7 +105,7 @@ async function crossCheckOffGoogle(
   }
 }
 
-function sortForReview(candidates: DiscoveredCandidate[]): DiscoveredCandidate[] {
+export function sortForReview(candidates: DiscoveredCandidate[]): DiscoveredCandidate[] {
   const rank = (c: DiscoveredCandidate) => {
     if (c.phoneInvalid) return 3; // bad phones sink to the bottom
     if (c.offGoogle) return 0; // the gold
@@ -114,6 +121,12 @@ export async function runDiscovery(
     sources?: DiscoverySourceId[];
     /** Extra candidate lists to merge in (e.g. parsed CSV rows). */
     extraCandidates?: DiscoveredCandidate[][];
+    /**
+     * Soft wall-clock budget for the whole run. Once exceeded, no NEW
+     * external calls start (in-flight ones finish) — the run returns what it
+     * has instead of blowing a serverless window. Omit for no limit.
+     */
+    timeBudgetMs?: number;
   },
 ): Promise<DiscoveryRunResult> {
   // Explicit [] means "no discovery sources" (e.g. CSV-only import runs);
@@ -137,9 +150,13 @@ export async function runDiscovery(
     runnable.push(src);
   }
 
-  // Early-stop signal shared by all budgets: enough unique candidates already.
+  // Early-stop signals shared by all budgets: enough unique candidates
+  // already, or the run's wall-clock budget is spent.
+  const deadline = opts?.timeBudgetMs ? Date.now() + opts.timeBudgetMs : Infinity;
+  const outOfTime = () => Date.now() > deadline;
   const targetUnique = Math.max(query.count, 1) * OVERSHOOT_FACTOR;
   const enough = () => {
+    if (outOfTime()) return true;
     const lists = [...resultsBySource.values(), ...(opts?.extraCandidates ?? [])];
     if (!lists.length) return false;
     return mergeCandidates(lists).length >= targetUnique;
@@ -170,8 +187,9 @@ export async function runDiscovery(
   }
 
   const merged = mergeCandidates(ordered);
-  await crossCheckOffGoogle(merged, notes);
+  await crossCheckOffGoogle(merged, notes, outOfTime);
   const { fresh, droppedExisting } = await filterAgainstSavedLeads(merged);
+  if (outOfTime()) notes.push("time budget reached — returned what was found so far");
 
   return { candidates: sortForReview(fresh), perSource, droppedExisting, notes };
 }
