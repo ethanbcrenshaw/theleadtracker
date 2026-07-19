@@ -597,8 +597,26 @@ async function executeTool(
     // Cross-city merge (a business discovered from two nearby cities is one
     // lead), then queue up to 2× the target — enrichment rejects some, and
     // the client stops importing once the target is reached.
+    //
+    // NOTE: the queue is ordered for IMPORT SUCCESS, not review order.
+    // Off-Google finds lead the review modal (a human culls there), but they
+    // can never be Places-vouched (no Places signals), so putting them first
+    // here would burn the queue on candidates that rarely pass the auto-import
+    // bar. Filter-matching Places-backed candidates go first; off-Google
+    // finds still get their shot after.
     const merged = sortForReview(mergeCandidates(lists));
-    const queued = merged.slice(0, Math.min(count * 2, 60));
+    const importRank = (c: DiscoveredCandidate) => {
+      if (c.phoneInvalid) return 4;
+      const hasSignals =
+        c.placesSignals && Object.values(c.placesSignals).some((v) => v !== undefined);
+      if (c.matchesFilter && hasSignals) return 0; // verifiable AND vouchable
+      if (hasSignals) return 1;
+      if (c.matchesFilter) return 2; // off-Google/web finds
+      return 3;
+    };
+    const queued = [...merged]
+      .sort((a, b) => importRank(a) - importRank(b))
+      .slice(0, Math.min(count * 2, 60));
     const offGoogleN = queued.filter((c) => c.offGoogle).length;
 
     const job: GenerateJob = {
