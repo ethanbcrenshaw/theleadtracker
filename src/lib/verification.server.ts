@@ -64,8 +64,12 @@ async function fetchOnce(url: string): Promise<Response> {
       redirect: "manual",
       signal: ctrl.signal,
       headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; LeadBloomVerifier/1.0)",
+        // A real browser UA — Cloudflare/WAF hosts 403 obvious bots, which
+        // used to read as a dead site (false "no website").
+        "User-Agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
         Accept: "text/html,application/xhtml+xml,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
       },
     });
   } finally {
@@ -131,6 +135,22 @@ export async function checkWebsite(rawUrl: string | null | undefined): Promise<W
         }
         url = next;
         continue;
+      }
+
+      // 401/403/429 = the server is up and gatekeeping (WAF/bot challenge/rate
+      // limit). The site EXISTS — count it live rather than dead, so a blocked
+      // inspection never becomes a false "no website".
+      if (res.status === 401 || res.status === 403 || res.status === 429) {
+        return {
+          website: {
+            status: "live",
+            url: original,
+            finalUrl: url,
+            httpStatus: res.status,
+            redirects,
+            reason: "exists (blocked inspection)",
+          },
+        };
       }
 
       if (res.status >= 400) {

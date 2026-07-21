@@ -136,6 +136,8 @@ type EnrichResult = {
   verificationReasons?: string[];
   verification?: LeadVerification;
   leadScore?: number;
+  websiteOpportunity?: string;
+  discoveredWebsite?: string;
 };
 
 // Same bar the rest of the app trusts: a partial-tier lead Google Places
@@ -645,16 +647,16 @@ function AssistantPage() {
           if (accept && imported < job.targetCount && !cancelledJobs.current.has(job.id)) {
             if (res.verificationTier === "verified") verifiedN++;
             else if (vouched) vouchedN++;
-            const ws = res.enrichment?.websiteStatus;
-            const oppRaw =
-              ws === "none" && cand.website
-                ? "No Dedicated Website"
-                : ws === "outdated"
-                  ? "Outdated Website"
-                  : cand.websiteOpportunity;
+            // res.websiteOpportunity carries verification's corrected label
+            // (e.g. a site found via search that Google didn't list).
+            const oppRaw = res.websiteOpportunity ?? cand.websiteOpportunity;
             const opp = (ALLOWED_OPP as string[]).includes(oppRaw)
               ? (oppRaw as WebsiteOpportunity)
               : "No Dedicated Website";
+            const onlinePresence =
+              res.discoveredWebsite && !cand.website
+                ? `Has a website (${res.discoveredWebsite}) — found via search`
+                : cand.onlinePresence || "Discovered via assistant";
             const sources = (cand.sources || []).filter((s): s is LeadSource =>
               (ALLOWED_SOURCES as string[]).includes(s),
             );
@@ -669,7 +671,7 @@ function AssistantPage() {
               phone: cand.phone,
               owner: cand.owner || undefined,
               ownerSource: cand.sourceUrl || undefined,
-              onlinePresence: cand.onlinePresence || "Discovered via assistant",
+              onlinePresence,
               websiteOpportunity: opp,
               quality: qualityFromOpportunity(opp),
               status: "Not Called",

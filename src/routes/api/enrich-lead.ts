@@ -78,9 +78,11 @@ export const Route = createFileRoute("/api/enrich-lead")({
 
           // Phase 2 verification pass. Re-verify has no fresh Places response,
           // so business-alive signals carry over from the last stored check.
+          // A site recovered from search feeds the score too.
+          const effectiveWebsite = website || result.discoveredWebsite || null;
           const priorBusiness = lead.verification?.business;
           const { verification, leadScore } = await runVerificationChecks({
-            website,
+            website: effectiveWebsite,
             phone: lead.phone,
             tier: result.verificationTier,
             signals: priorBusiness
@@ -93,7 +95,7 @@ export const Route = createFileRoute("/api/enrich-lead")({
               : undefined,
           });
 
-          const patch = {
+          const patch: Record<string, unknown> = {
             enrichment: result.enrichment,
             confidenceScore: result.confidenceScore,
             confidenceEvidence: result.confidenceEvidence,
@@ -104,6 +106,14 @@ export const Route = createFileRoute("/api/enrich-lead")({
             verification,
             leadScore,
           };
+          // Correct the opportunity label when verification found a real site
+          // (or confirmed there's none). quality re-derives from it client-side.
+          if (result.websiteOpportunity && result.websiteOpportunity !== lead.websiteOpportunity) {
+            patch.websiteOpportunity = result.websiteOpportunity;
+            if (result.discoveredWebsite) {
+              patch.onlinePresence = `Has a website (${result.discoveredWebsite}) — found via search`;
+            }
+          }
 
           const { error: updErr } = await supabase.from("leads").update(patch).eq("id", leadId);
           if (updErr) return Response.json({ error: updErr.message }, { status: 500 });

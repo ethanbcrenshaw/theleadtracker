@@ -35,6 +35,54 @@ const DIRECTORY_HOSTS = [
   "alignable.com",
 ];
 
+// A real browser UA. Many small-business sites sit behind Cloudflare/WAFs that
+// 403 or challenge an obvious bot UA — which used to make a live site look
+// dead ("No Dedicated Website"). Presenting as a browser cuts those false
+// negatives sharply.
+const BROWSER_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+
+// Hosts that are never a business's OWN website — socials, directories,
+// aggregators, search engines, maps. Used to recognize a real homepage in
+// organic search results (the business's own site) vs. a listing about them.
+const NON_OWN_HOSTS = [
+  ...DIRECTORY_HOSTS,
+  "facebook.com",
+  "instagram.com",
+  "linkedin.com",
+  "twitter.com",
+  "x.com",
+  "tiktok.com",
+  "youtube.com",
+  "pinterest.com",
+  "google.com",
+  "goo.gl",
+  "g.co",
+  "bing.com",
+  "yahoo.com",
+  "duckduckgo.com",
+  "wikipedia.org",
+  "waze.com",
+  "apple.com",
+  "chamberofcommerce.com",
+  "cylex.us.com",
+  "hotfrog.com",
+  "localsearch.com",
+  "dexknows.com",
+  "superpages.com",
+  "citysearch.com",
+  "local.com",
+  "zoominfo.com",
+  "dnb.com",
+  "buzzfile.com",
+  "merchantcircle.com",
+  "loc8nearme.com",
+  "birdeye.com",
+  "expertise.com",
+  "indeed.com",
+  "glassdoor.com",
+];
+
 export function hostOf(u: string): string | null {
   try {
     return new URL(u.startsWith("http") ? u : `https://${u}`).hostname
@@ -43,6 +91,37 @@ export function hostOf(u: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Does this host look like the business's OWN domain (not a third-party page
+ * that merely names them)? The check is on the DOMAIN itself, not the page
+ * title — a directory like boatplanet.com titled "Dean's Auto Upholstery"
+ * must NOT pass, while deansautoupholstery.com (or a shortened deansauto.com)
+ * should. We compare the registrable label against the business's name
+ * signature (full name, first-3 words, first-2 words), each direction.
+ */
+export function looksLikeOwnDomain(host: string, business: string): boolean {
+  const core =
+    host
+      .replace(
+        /\.(com|net|org|biz|us|co|io|shop|site|online|info|company|services|inc|llc)(\.[a-z]{2})?$/,
+        "",
+      )
+      .split(".")
+      .pop() || host;
+  const hostKey = core.replace(/[^a-z0-9]/g, "");
+  if (hostKey.length < 5) return false;
+  const words = business
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 1);
+  if (!words.length) return false;
+  const sigs = [words.join(""), words.slice(0, 3).join(""), words.slice(0, 2).join("")].filter(
+    (s) => s.length >= 6,
+  );
+  return sigs.some((sig) => hostKey.includes(sig) || sig.includes(hostKey));
 }
 
 function isOneOf(host: string, list: string[]): boolean {
@@ -237,27 +316,46 @@ async function verifyWebsiteAlive(
       method: "GET",
       redirect: "follow",
       signal: ctrl.signal,
-      headers: { "User-Agent": "Mozilla/5.0 lead-bloom-verifier" },
+      headers: {
+        "User-Agent": BROWSER_UA,
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
     });
-    if (!res.ok) return { alive: false, reason: `status ${res.status}` };
+    const finalHost = hostOf(res.url) ?? host;
+    // A redirect off to a social/directory means no dedicated website. Check
+    // this BEFORE status, since some hosts 403 the landing but still redirect.
+    if (finalHost !== host) {
+      if (finalHost.endsWith("facebook.com") || finalHost.endsWith("instagram.com")) {
+        return { alive: false, finalHost, reason: "redirects to social page" };
+      }
+      if (isOneOf(finalHost, DIRECTORY_HOSTS)) {
+        return { alive: false, finalHost, reason: "redirects to directory" };
+      }
+    }
+    // 401/403/429 = the server is up and gatekeeping (WAF, bot challenge, rate
+    // limit). The site clearly EXISTS — treat it as live-but-uninspectable
+    // rather than "no website". Empty body → the caller skips staleness checks.
+    if (res.status === 401 || res.status === 403 || res.status === 429) {
+      return { alive: true, finalHost, body: "", reason: "exists (blocked inspection)" };
+    }
+    if (!res.ok) return { alive: false, finalHost, reason: `status ${res.status}` };
     const body = await res.text();
-    if (body.length < 400) return { alive: false, body, reason: "empty page" };
     if (
       /domain (is )?for sale|buy this domain|parked (free )?by|godaddy\.com\/domains|sedoparking|hugedomains|this domain may be for sale/i.test(
         body,
       )
     ) {
-      return { alive: false, body, reason: "parked domain" };
+      return { alive: false, body, finalHost, reason: "parked domain" };
     }
-    const finalHost = hostOf(res.url) ?? host;
-    // Redirected off to a social/directory — treat as no dedicated website.
-    if (finalHost !== host) {
-      if (finalHost.endsWith("facebook.com") || finalHost.endsWith("instagram.com")) {
-        return { alive: false, body, finalHost, reason: "redirects to social page" };
-      }
-      if (isOneOf(finalHost, DIRECTORY_HOSTS)) {
-        return { alive: false, body, finalHost, reason: "redirects to directory" };
-      }
+    // A single-page-app shell can be short but is still a real site. Only call
+    // it empty when it's tiny AND carries no markup that a real page would.
+    const looksReal =
+      /<script|<title|<link[^>]+stylesheet|id=["']root["']|id=["']app["']|data-reactroot|__next|<div/i.test(
+        body,
+      );
+    if (body.length < 400 && !looksReal) {
+      return { alive: false, body, finalHost, reason: "empty page" };
     }
     return { alive: true, finalHost, body };
   } catch {
@@ -265,6 +363,46 @@ async function verifyWebsiteAlive(
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Firecrawl's search index is directory-heavy and frequently misses a
+ * business's own homepage even when Google ranks it first. So we also probe
+ * the obvious domain guesses from the name (deansautoupholstery.com,
+ * deansauto.com) and accept one ONLY if the fetched page proves it's them —
+ * the business name, phone, or city appears in the body. An exact full-name
+ * domain that's WAF-blocked (no body) is trusted, since squatters rarely hold
+ * a business's exact-name domain. Never accepts a random or parked domain.
+ */
+async function probeGuessedDomain(
+  business: string,
+  city: string,
+  phone: string,
+): Promise<string | undefined> {
+  const words = business
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 1);
+  if (!words.length) return undefined;
+  const full = words.join("");
+  const first2 = words.slice(0, 2).join("");
+  const guesses: string[] = [];
+  if (full.length >= 5) guesses.push(`${full}.com`, `${full}.net`);
+  if (first2.length >= 5 && first2 !== full) guesses.push(`${first2}.com`);
+
+  for (const host of guesses) {
+    const check = await verifyWebsiteAlive(host);
+    if (!check.alive) continue;
+    const body = (check.body || "").slice(0, 20000);
+    const identityConfirmed = body
+      ? nameSimilar(body, business) ||
+        (phone && phoneMatches(body, phone)) ||
+        cityMentioned(body, city)
+      : host === `${full}.com`; // blocked exact-name domain — trust it
+    if (identityConfirmed) return check.finalHost || host;
+  }
+  return undefined;
 }
 
 function isBodyOutdated(body: string): boolean {
@@ -317,6 +455,15 @@ export interface EnrichResult {
   unverifiedReason?: string;
   verificationTier: VerificationTier;
   verificationReasons: string[];
+  /**
+   * Re-derived opportunity label from what verification actually found —
+   * upgrades "No Dedicated Website" to "Has Website"/"Outdated Website" when a
+   * live site is confirmed (incl. one recovered from search). Undefined means
+   * "keep the caller's original classification".
+   */
+  websiteOpportunity?: string;
+  /** A live website recovered from search that Google didn't list (host only). */
+  discoveredWebsite?: string;
 }
 
 async function generatePitchAngle(
@@ -374,9 +521,23 @@ export async function enrichLeadFull(
   const reviews: LeadReviews[] = [];
   const seen = new Set<string>();
   let recentActivity: string | undefined;
+  // The business's OWN website, recovered from organic results. Google Business
+  // Profile frequently omits the site, so a lead can look like "No Dedicated
+  // Website" while a real site sits in the very first search result. We take
+  // the top-ranked non-social/non-directory hit whose name matches.
+  let discoveredWebsite: string | undefined;
 
   for (const r of results) {
     if (!r.url) continue;
+    if (!discoveredWebsite && !input.website) {
+      const h = hostOf(r.url);
+      if (h && !isOneOf(h, NON_OWN_HOSTS) && !h.endsWith(".gov")) {
+        // Match on the DOMAIN, not the page title — otherwise a directory that
+        // happens to be titled with the business name would be mistaken for
+        // their own site.
+        if (looksLikeOwnDomain(h, input.business)) discoveredWebsite = h;
+      }
+    }
     const t = classifyProfile(r.url);
     if (!t) continue;
     const key = `${t}:${r.url}`;
@@ -401,6 +562,37 @@ export async function enrichLeadFull(
     if (!recentActivity) {
       const ra = parseRecentActivity(snip);
       if (ra) recentActivity = `${t}: ${ra}`;
+    }
+  }
+
+  // Recall fix: the quoted profile-search above is tuned to match socials/
+  // directories, and often doesn't surface a business's plain homepage. When
+  // Google listed no site and we found no own-domain, run ONE unquoted pass
+  // aimed at the homepage. Only fires for would-be "no website" leads — the
+  // exact case where the label matters most.
+  if (!discoveredWebsite && !input.website) {
+    const homepageHits = await firecrawlSearch(
+      `${input.business} ${input.city} ${input.state}`,
+      firecrawlKey,
+      8,
+    );
+    for (const r of homepageHits) {
+      if (!r.url) continue;
+      const h = hostOf(r.url);
+      if (
+        h &&
+        !isOneOf(h, NON_OWN_HOSTS) &&
+        !h.endsWith(".gov") &&
+        looksLikeOwnDomain(h, input.business)
+      ) {
+        discoveredWebsite = h;
+        break;
+      }
+    }
+    // Last resort: guess the domain from the name and confirm by fetching it.
+    // Catches homepages Firecrawl's index never surfaces (the Dean's case).
+    if (!discoveredWebsite) {
+      discoveredWebsite = await probeGuessedDomain(input.business, input.city, input.phone);
     }
   }
 
@@ -482,29 +674,46 @@ export async function enrichLeadFull(
     verifiedProfiles.push({ ...p, note: p.note || "unverified match" });
   }
 
-  // ── Verify the website claim by actually fetching it ────────────────────
+  // ── Verify the website by actually fetching it ──────────────────────────
+  // Prefer the site Google listed; otherwise fall back to one we recovered
+  // from organic search results (the fix for "beautiful site, not on Google").
   let websiteStatus: LeadEnrichment["websiteStatus"] = "unknown";
   let lastVerifiedAt: string | undefined;
+  let verifiedWebsiteHost: string | undefined;
+  const websiteToVerify = input.website || discoveredWebsite;
+  const wasDiscovered = !input.website && !!discoveredWebsite;
 
-  if (input.website) {
-    const check = await verifyWebsiteAlive(input.website);
+  if (websiteToVerify) {
+    const check = await verifyWebsiteAlive(websiteToVerify);
     lastVerifiedAt = new Date().toISOString();
     if (!check.alive) {
       websiteStatus = "none";
-      verificationReasons.push(`claimed site unreachable (${check.reason || "no response"})`);
-      // Drop the website from the presence map since it doesn't actually exist.
+      // Only a site Google actually CLAIMED counts as a broken claim; a
+      // discovered candidate that didn't pan out just leaves them no-website.
+      if (input.website) {
+        verificationReasons.push(`claimed site unreachable (${check.reason || "no response"})`);
+      }
     } else {
-      // Loaded — now classify good vs outdated based on real content.
-      const outdated = isBodyOutdated(check.body || "");
+      // A blocked/challenge response has no usable body — don't run staleness
+      // heuristics on nothing (that would falsely read as "outdated").
+      const body = check.body || "";
+      const outdated = body.length > 400 ? isBodyOutdated(body) : false;
       websiteStatus = outdated ? "outdated" : "good";
-      const host = check.finalHost || input.website;
+      const host = check.finalHost || websiteToVerify;
+      verifiedWebsiteHost = host;
       verifiedProfiles.unshift({
         type: "website",
         url: `https://${host}`,
         label: host,
-        note: outdated ? "verified — looks outdated" : "verified live site",
+        note: wasDiscovered
+          ? "found a live site Google doesn't list"
+          : outdated
+            ? "verified — looks outdated"
+            : "verified live site",
       });
-      if (outdated) verificationReasons.push("site loads but looks outdated");
+      if (wasDiscovered)
+        verificationReasons.push("has a website (found via search, not on Google)");
+      else if (outdated) verificationReasons.push("site loads but looks outdated");
       else verificationReasons.push("website verified live");
     }
   } else {
@@ -645,6 +854,13 @@ export async function enrichLeadFull(
   if (profileMatchFailed && !anyIdentityMatch)
     verificationReasons.push("scraped profile didn't match business");
 
+  // Re-derive the opportunity label from what we actually confirmed. This is
+  // what corrects "No Dedicated Website" on a business that in fact has a site.
+  let websiteOpportunity: string | undefined;
+  if (websiteStatus === "good") websiteOpportunity = "Has Website";
+  else if (websiteStatus === "outdated") websiteOpportunity = "Outdated Website";
+  else if (websiteStatus === "none" && input.website) websiteOpportunity = "No Dedicated Website";
+
   return {
     enrichment,
     confidenceScore: score,
@@ -653,6 +869,8 @@ export async function enrichLeadFull(
     unverifiedReason,
     verificationTier: tier,
     verificationReasons,
+    websiteOpportunity,
+    discoveredWebsite: wasDiscovered ? verifiedWebsiteHost : undefined,
   };
 }
 

@@ -287,14 +287,16 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
         cand.verification = result.verification;
         cand.leadScore = result.leadScore;
 
-        // Reflect verified website status back onto the opp label.
-        const ws = result.enrichment?.websiteStatus;
-        if (ws === "none" && cand.website) {
-          cand.websiteOpportunity = "No Dedicated Website";
+        // Reflect what verification actually found back onto the label.
+        // result.websiteOpportunity carries the corrected classification,
+        // including a site recovered from search that Google didn't list.
+        if (result.websiteOpportunity) cand.websiteOpportunity = result.websiteOpportunity;
+        if (result.discoveredWebsite && !cand.website) {
+          cand.website = result.discoveredWebsite;
+          cand.onlinePresence = `Has a website (${result.discoveredWebsite}) — found via search`;
+        } else if (result.enrichment?.websiteStatus === "none" && cand.website) {
           cand.onlinePresence = `Claimed site (${cand.website}) unreachable`;
           cand.website = null;
-        } else if (ws === "outdated") {
-          cand.websiteOpportunity = "Outdated Website";
         }
         cand._enrichState = "done";
       } catch {

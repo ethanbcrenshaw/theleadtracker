@@ -11,6 +11,7 @@ type Summary = {
   closed: number;
   deadSites: number;
   wrongBusiness: number;
+  reclassified: number;
   errors: number;
 };
 
@@ -43,6 +44,7 @@ export function ReverifyButton() {
       closed: 0,
       deadSites: 0,
       wrongBusiness: 0,
+      reclassified: 0,
       errors: 0,
     };
 
@@ -71,7 +73,10 @@ export function ReverifyButton() {
             verificationReasons?: string[];
             verification?: LeadVerification;
             leadScore?: number;
+            websiteOpportunity?: string;
+            onlinePresence?: string;
           };
+          const beforeOpp = lead.websiteOpportunity;
           updateLead(lead.id, {
             enrichment: u.enrichment,
             confidenceScore: u.confidenceScore,
@@ -82,7 +87,13 @@ export function ReverifyButton() {
             verificationReasons: u.verificationReasons,
             verification: u.verification,
             leadScore: u.leadScore,
+            // Reclassification (e.g. a now-found website) — quality re-derives.
+            ...(u.websiteOpportunity
+              ? { websiteOpportunity: u.websiteOpportunity as Lead["websiteOpportunity"] }
+              : {}),
+            ...(u.onlinePresence ? { onlinePresence: u.onlinePresence } : {}),
           });
+          if (u.websiteOpportunity && u.websiteOpportunity !== beforeOpp) s.reclassified++;
           s.checked++;
           const nextTier = u.verificationTier ?? "partial";
           const reasons = (u.verificationReasons ?? []).join(" ").toLowerCase();
@@ -141,6 +152,12 @@ export function ReverifyButton() {
                 .filter(Boolean)
                 .join(", ")})`
             : ""}
+          {summary.reclassified ? (
+            <span className="text-[color:var(--frog-ink)]">
+              {" "}
+              · {summary.reclassified} RECLASSIFIED
+            </span>
+          ) : null}
           {summary.errors ? ` · ${summary.errors} errors` : ""}
         </span>
       )}

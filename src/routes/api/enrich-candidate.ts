@@ -50,8 +50,11 @@ export const Route = createFileRoute("/api/enrich-candidate")({
           );
           // Phase 2 verification pass: website liveness/freshness + business
           // signals + composite lead score. 5s timeouts, never throws.
+          // Feed in any site enrichment recovered from search so the score
+          // reflects the real web presence, not just what Google listed.
+          const effectiveWebsite = body.website || result.discoveredWebsite || null;
           const { verification, leadScore } = await runVerificationChecks({
-            website: body.website,
+            website: effectiveWebsite,
             phone: body.phone,
             tier: result.verificationTier,
             signals: body.placesSignals,
