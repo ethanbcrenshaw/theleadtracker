@@ -110,23 +110,41 @@ const CITY_ZONE: Record<string, USZone> = {
   "gary|IN": "CT",
 };
 
-// Standard-time UTC offsets per zone (minutes). Used to map a Places
-// utcOffsetMinutes (which reflects DST at fetch time) back to a zone.
-const ZONE_STD_OFFSET: Record<USZone, number> = {
-  ET: -300,
-  CT: -360,
-  MT: -420,
-  PT: -480,
-  AKT: -540,
-  HAT: -600,
-};
+/** A zone's actual UTC offset (minutes) right now, DST included, via Intl. */
+function zoneCurrentOffset(zone: USZone, at: Date): number {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: ZONE_IANA[zone],
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    })
+      .formatToParts(at)
+      .map((x) => [x.type, x.value]),
+  );
+  const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
+  return Math.round((asUTC - at.getTime()) / 60000);
+}
 
-function zoneFromOffset(utcOffsetMinutes: number): USZone | null {
+/**
+ * Map a Places utcOffsetMinutes back to a US zone. The offset alone is
+ * ambiguous across DST (MDT −360 == CST, PDT −420 == MST), so a static
+ * standard-time table misclassifies every western lead by one zone all
+ * summer. Instead we match against each zone's ACTUAL current offset — which
+ * is distinct per zone in any given season. Cross-season data falls back to
+ * a ±60 match (best-effort), then the caller's city/state map.
+ */
+function zoneFromOffset(utcOffsetMinutes: number, now = new Date()): USZone | null {
   for (const z of ZONE_ORDER) {
-    const std = ZONE_STD_OFFSET[z];
-    // Accept standard or DST (+60) variants. Hawaii/most-of-Arizona don't
-    // observe DST, but the exact match still lands.
-    if (utcOffsetMinutes === std || utcOffsetMinutes === std + 60) return z;
+    if (zoneCurrentOffset(z, now) === utcOffsetMinutes) return z;
+  }
+  for (const z of ZONE_ORDER) {
+    const o = zoneCurrentOffset(z, now);
+    if (utcOffsetMinutes === o + 60 || utcOffsetMinutes === o - 60) return z;
   }
   return null;
 }
