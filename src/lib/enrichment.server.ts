@@ -464,8 +464,12 @@ export interface EnrichResult {
   websiteOpportunity?: string;
   /** A live website recovered from search that Google didn't list (host only). */
   discoveredWebsite?: string;
-  /** Raw HTML of the fetched site (tags stripped by caller) — for site scoring. */
+  /** Fetched site text (tags stripped) — for an optional AI read. */
   siteBody?: string;
+  /** Raw fetched HTML (capped) — for the deterministic site-quality checker. */
+  siteHtml?: string;
+  /** Host of the site that was actually fetched. */
+  siteHost?: string;
 }
 
 async function generatePitchAngle(
@@ -875,7 +879,7 @@ export async function enrichLeadFull(
     verificationReasons,
     websiteOpportunity,
     discoveredWebsite: wasDiscovered ? verifiedWebsiteHost : undefined,
-    // Strip tags/scripts so the scoring read gets text, not markup.
+    // Strip tags/scripts so the optional AI read gets text, not markup.
     siteBody: siteBody
       ? siteBody
           .replace(/<(script|style)[\s\S]*?<\/\1>/gi, " ")
@@ -883,6 +887,9 @@ export async function enrichLeadFull(
           .replace(/\s+/g, " ")
           .slice(0, 8000)
       : undefined,
+    // Raw HTML for the deterministic checker (forms, imgs, meta, links).
+    siteHtml: siteBody ? siteBody.slice(0, 200_000) : undefined,
+    siteHost: verifiedWebsiteHost,
   };
 }
 

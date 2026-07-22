@@ -90,6 +90,8 @@ export const CONFIG = {
   },
 } as const;
 
+const CURRENT_YEAR = new Date().getFullYear();
+
 export type SiteAssessment = {
   band: "poor" | "plain" | "strong";
   reason: string;
@@ -97,7 +99,130 @@ export type SiteAssessment = {
   modern: boolean;
   hasBooking: boolean; // online booking OR a quote/contact form
   hasChat: boolean; // chat widget or AI receptionist
+  /** Concrete "this site is weak" tells, for the caller to eyeball. */
+  cues?: string[];
+  /** Inferred age/platform hint ("© 2016", "Wix (free tier)"). */
+  builtHint?: string;
 };
+
+// Site-builder / free-tier hosts — a business still on one of these usually
+// has a thin, template site worth pitching a rebuild.
+const BUILDER_HOSTS: Array<[string, string]> = [
+  ["wixsite.com", "Wix (free tier)"],
+  ["business.site", "Google Business site builder"],
+  ["weebly.com", "Weebly"],
+  ["godaddysites.com", "GoDaddy Website Builder"],
+  ["blogspot.", "Blogspot"],
+  ["wordpress.com", "WordPress.com (free)"],
+  ["squarespace.com", "Squarespace default domain"],
+  ["myshopify.com", "Shopify default domain"],
+  ["webflow.io", "Webflow staging"],
+  ["yolasite.com", "Yola"],
+  ["jimdosite.com", "Jimdo"],
+];
+const CHAT_WIDGETS =
+  /intercom|drift\.com|tawk\.to|livechat|tidio|crisp\.chat|zendesk|olark|podium|birdeye|facebook\.com\/customer_chat|customerchat|live ?chat|chat with us/i;
+const BOOKING_WIDGETS =
+  /calendly|acuityscheduling|squareup\.com\/appointments|setmore|schedulicity|book(?:ing)?now|vagaro|housecallpro|jobber/i;
+
+/**
+ * Deterministic website-quality read from raw HTML — NO AI, so it never
+ * touches API credits. Grades poor/plain/strong and lists the concrete weak
+ * signals a human would notice: not mobile-friendly, dated markup, a builder/
+ * free-tier host, a stale copyright year, no gallery of their work, no
+ * quote/contact form, a single-page site, no chat/receptionist.
+ */
+export function heuristicSiteAssessment(html: string, host = ""): SiteAssessment {
+  const cues: string[] = [];
+  const h = html;
+
+  const mobileResponsive = /<meta[^>]+name=["']viewport["']/i.test(h);
+  if (!mobileResponsive) cues.push("not mobile-friendly (no viewport tag)");
+
+  // Platform / build-age hints.
+  let builtHint: string | undefined;
+  for (const [dom, label] of BUILDER_HOSTS) {
+    if (host.includes(dom) || h.toLowerCase().includes(dom)) {
+      cues.push(`built on ${label}`);
+      builtHint = label;
+      break;
+    }
+  }
+  const generator = h.match(/<meta[^>]+name=["']generator["'][^>]+content=["']([^"']+)["']/i)?.[1];
+  if (generator && !builtHint) builtHint = generator;
+  const years = [...h.matchAll(/(?:©|&copy;|copyright)[^0-9]{0,15}(20\d{2})/gi)]
+    .map((m) => parseInt(m[1], 10))
+    .filter((y) => y >= 2000 && y <= CURRENT_YEAR + 1);
+  const copyrightYear = years.length ? Math.max(...years) : undefined;
+  if (copyrightYear && CURRENT_YEAR - copyrightYear >= 3)
+    cues.push(`copyright ${copyrightYear} (${CURRENT_YEAR - copyrightYear} yrs stale)`);
+  if (copyrightYear && !builtHint) builtHint = `© ${copyrightYear}`;
+
+  // Ancient markup.
+  if (/<font\b|<center\b|<marquee\b/i.test(h) || /<table[^>]+(bgcolor|cellpadding)/i.test(h))
+    cues.push("dated HTML (table/font layout)");
+  if (/\.swf\b|shockwave|<embed\b/i.test(h)) cues.push("uses Flash/embed (very dated)");
+
+  // Gallery of their work.
+  const imgCount = (h.match(/<img\b/gi) || []).length;
+  const galleryWord =
+    /gallery|portfolio|our work|our projects|before\s*(?:&amp;|and|\/)?\s*after/i.test(h);
+  if (imgCount < 4 && !galleryWord) cues.push("no photo gallery of their work");
+
+  // Contact / quote path.
+  const hasForm = /<form\b/i.test(h) && /<(input|textarea)\b/i.test(h);
+  const emailField = /type=["']email["']/i.test(h) || /mailto:/i.test(h);
+  const quoteWord =
+    /request a quote|get a quote|free quote|free estimate|get (?:a )?estimate|book (?:an? )?(?:appointment|consultation)|schedule (?:a )?(?:call|visit|consultation)/i.test(
+      h,
+    );
+  const hasBooking = BOOKING_WIDGETS.test(h) || (hasForm && (emailField || quoteWord)) || quoteWord;
+  if (!hasBooking && !hasForm) cues.push("no quote or contact form");
+
+  const hasChat = CHAT_WIDGETS.test(h);
+  if (!hasChat) cues.push("no chat/receptionist widget");
+
+  // Single-page site: count distinct internal paths.
+  const paths = new Set<string>();
+  const bareHost = host.replace(/^www\./, "");
+  for (const m of h.matchAll(/href=["']([^"']+)["']/gi)) {
+    const u = m[1];
+    if (/^(mailto:|tel:|javascript:|#|data:)/i.test(u)) continue;
+    try {
+      const abs = new URL(u, `https://${host || "x.com"}/`);
+      if (abs.hostname.replace(/^www\./, "") === bareHost)
+        paths.add(abs.pathname.replace(/\/+$/, "") || "/");
+    } catch {
+      /* ignore */
+    }
+  }
+  if (host && paths.size <= 1) cues.push("appears to be a single-page site");
+
+  // Modern-framework signal → likely a decent recent build.
+  const framework =
+    /__NEXT_DATA__|data-reactroot|wp-content|elementor|cdn\.shopify|squarespace|wixstatic|_next\/|gatsby|astro-/i.test(
+      h,
+    );
+  const modern =
+    mobileResponsive &&
+    (framework || (copyrightYear !== undefined && CURRENT_YEAR - copyrightYear <= 2)) &&
+    !cues.some((c) => /dated|Flash|free tier|single-page|not mobile/i.test(c));
+
+  const clearlyWeak =
+    !mobileResponsive ||
+    cues.some((c) => /dated|Flash|free tier|Wix|Weebly|GoDaddy|stale|single-page/i.test(c)) ||
+    (!hasBooking && imgCount < 4);
+  const band: SiteAssessment["band"] =
+    modern && mobileResponsive && hasBooking && hasChat ? "strong" : clearlyWeak ? "poor" : "plain";
+
+  const reason = cues.length
+    ? cues.slice(0, 4).join("; ")
+    : band === "strong"
+      ? "modern, responsive, has booking + chat"
+      : "functional but basic — no booking or chat";
+
+  return { band, reason, mobileResponsive, modern, hasBooking, hasChat, cues, builtHint };
+}
 
 export interface ScoreInput {
   business: string;
@@ -289,11 +414,16 @@ export function scoreLead(input: ScoreInput): ScoreResult {
         : web_presence.band === "plain"
           ? "basic site, no automation"
           : "modern site already";
+  // Surface the concrete site tells so the human knows why it reads "weak".
+  const siteCues = input.site?.cues?.length
+    ? ` Site tells: ${input.site.cues.slice(0, 4).join(", ")}${input.site.builtHint ? ` (${input.site.builtHint})` : ""}.`
+    : "";
   const rationale =
     `${reachability.band === "owner_run" ? "Owner-run" : reachability.band === "larger" ? "Larger/franchise" : "Small-chain"} ` +
     `${niche_fit.band === "off-vertical" ? "shop" : niche_fit.band + " fit"}` +
     `${rating ? `, ${rating}★${reviews ? ` over ${reviews} reviews` : ""}` : ""}, ` +
-    `${webPhrase}, ${missed_inquiry.band === "high" ? "phone-driven contact" : missed_inquiry.band === "some" ? "a basic form but no automation" : "channels already automated"}.`;
+    `${webPhrase}, ${missed_inquiry.band === "high" ? "phone-driven contact" : missed_inquiry.band === "some" ? "a basic form but no automation" : "channels already automated"}.` +
+    siteCues;
 
   return {
     leadScore: total,

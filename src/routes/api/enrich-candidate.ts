@@ -3,7 +3,7 @@ import "@tanstack/react-start";
 import { enrichLeadFull, hostOf } from "@/lib/enrichment.server";
 import { runVerificationChecks, type PlacesSignals } from "@/lib/verification.server";
 import { getAI } from "@/lib/ai.server";
-import { assessSiteQuality, scoreLead } from "@/lib/scoring.server";
+import { heuristicSiteAssessment, scoreLead } from "@/lib/scoring.server";
 
 /**
  * Enrich + verify a single candidate lead (not yet in DB). Called from
@@ -83,10 +83,13 @@ export const Route = createFileRoute("/api/enrich-candidate")({
           const hasWebsite =
             result.enrichment.websiteStatus === "good" ||
             result.enrichment.websiteStatus === "outdated";
+          // Deterministic site read — no AI, so no API credits are spent.
           const site =
-            hasWebsite && result.siteBody && ai
-              ? await assessSiteQuality(result.siteBody, body.business, ai)
+            hasWebsite && result.siteHtml
+              ? heuristicSiteAssessment(result.siteHtml, result.siteHost)
               : null;
+          if (site?.cues?.length)
+            result.confidenceEvidence.push(...site.cues.slice(0, 3).map((c) => `site: ${c}`));
           const scored = scoreLead({
             business: body.business,
             primaryType: body.placesSignals?.primaryType ?? null,

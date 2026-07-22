@@ -4,7 +4,7 @@ import { enrichLeadFull } from "@/lib/enrichment.server";
 import { hostOf } from "@/lib/enrichment.server";
 import { runVerificationChecks } from "@/lib/verification.server";
 import { getAI } from "@/lib/ai.server";
-import { assessSiteQuality, scoreLead } from "@/lib/scoring.server";
+import { heuristicSiteAssessment, scoreLead } from "@/lib/scoring.server";
 import { createClient } from "@supabase/supabase-js";
 import type { LeadTier, LeadVerification, ScoreBreakdown } from "@/lib/types";
 
@@ -105,9 +105,10 @@ export const Route = createFileRoute("/api/enrich-lead")({
           const hasWebsite =
             result.enrichment.websiteStatus === "good" ||
             result.enrichment.websiteStatus === "outdated";
+          // Deterministic site read — no AI, so no API credits are spent.
           const site =
-            hasWebsite && result.siteBody && ai
-              ? await assessSiteQuality(result.siteBody, lead.business, ai)
+            hasWebsite && result.siteHtml
+              ? heuristicSiteAssessment(result.siteHtml, result.siteHost)
               : null;
           const scored = scoreLead({
             business: lead.business,
