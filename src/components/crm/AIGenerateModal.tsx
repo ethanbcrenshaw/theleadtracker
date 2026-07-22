@@ -16,7 +16,9 @@ import type {
   Lead,
   LeadEnrichment,
   LeadSource,
+  LeadTier,
   LeadVerification,
+  ScoreBreakdown,
   VerificationTier,
   WebsiteOpportunity,
 } from "@/lib/types";
@@ -88,6 +90,8 @@ type Candidate = {
   verificationReasons?: string[];
   verification?: LeadVerification;
   leadScore?: number;
+  leadTier?: LeadTier;
+  scoreBreakdown?: ScoreBreakdown;
   _id: string;
   _selected: boolean;
   _enrichState: "pending" | "running" | "done" | "failed";
@@ -272,6 +276,7 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
             placesSignals: cand.placesSignals,
             offGoogle: cand.offGoogle,
             foundVia: cand.foundVia,
+            industry,
           }),
         });
         const j = await r.json();
@@ -286,6 +291,8 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
         cand.verificationReasons = result.verificationReasons;
         cand.verification = result.verification;
         cand.leadScore = result.leadScore;
+        cand.leadTier = result.leadTier;
+        cand.scoreBreakdown = result.scoreBreakdown;
 
         // Reflect what verification actually found back onto the label.
         // result.websiteOpportunity carries the corrected classification,
@@ -418,6 +425,8 @@ export function AIGenerateModal({ open, onClose, initialIndustry, initialCity }:
         verificationReasons: r.verificationReasons,
         verification: r.verification,
         leadScore: r.leadScore,
+        leadTier: r.leadTier,
+        scoreBreakdown: r.scoreBreakdown,
         foundVia: r.foundVia,
       };
     });

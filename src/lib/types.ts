@@ -179,7 +179,27 @@ export interface Lead {
   callScript?: CallScript;
   verificationTier?: VerificationTier;
   verificationReasons?: string[];
-  leadScore?: number; // composite 0-100 opportunity score
+  leadScore?: number; // 0-100 fit score (Furniture/Upholstery scoring spec)
+  leadTier?: LeadTier; // hot | warm | cool | cold | disqualified
+  scoreBreakdown?: ScoreBreakdown; // per-criterion points + rationale
   verification?: LeadVerification;
   foundVia?: string[]; // discovery source ids that found this lead (provenance)
 }
+
+// ── Lead scoring (Furniture Repair & Upholstery spec) ───────────────────────
+export type LeadTier = "hot" | "warm" | "cool" | "cold" | "disqualified";
+
+export type ScoreBand = { band: string; points: number };
+
+export type ScoreBreakdown = {
+  niche_fit: ScoreBand;
+  web_presence: ScoreBand;
+  reputation: ScoreBand;
+  missed_inquiry: ScoreBand;
+  reachability: ScoreBand;
+  total: number;
+  tier: LeadTier;
+  rationale: string;
+  /** Prior scores, appended on re-enrichment so drift is visible. */
+  history?: Array<{ score: number; tier: LeadTier; at: string }>;
+};

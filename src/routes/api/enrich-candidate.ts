@@ -3,6 +3,7 @@ import "@tanstack/react-start";
 import { enrichLeadFull, hostOf } from "@/lib/enrichment.server";
 import { runVerificationChecks, type PlacesSignals } from "@/lib/verification.server";
 import { getAI } from "@/lib/ai.server";
+import { assessSiteQuality, scoreLead } from "@/lib/scoring.server";
 
 /**
  * Enrich + verify a single candidate lead (not yet in DB). Called from
@@ -28,6 +29,7 @@ export const Route = createFileRoute("/api/enrich-candidate")({
           placesSignals?: PlacesSignals;
           offGoogle?: boolean;
           foundVia?: string[];
+          industry?: string; // the segment searched — feeds niche scoring
         };
         try {
           body = await request.json();
@@ -74,7 +76,45 @@ export const Route = createFileRoute("/api/enrich-candidate")({
             result.confidenceEvidence.push(`corroborated — ${names}`);
           }
           if (body.offGoogle) result.confidenceEvidence.push("off Google");
-          return Response.json({ ok: true, result: { ...result, verification, leadScore } });
+
+          // ── Furniture/Upholstery scoring (runs after enrichment) ──────────
+          // Read the site with Claude only when one exists; otherwise web
+          // presence scores as "none" with no Firecrawl step.
+          const hasWebsite =
+            result.enrichment.websiteStatus === "good" ||
+            result.enrichment.websiteStatus === "outdated";
+          const site =
+            hasWebsite && result.siteBody && ai
+              ? await assessSiteQuality(result.siteBody, body.business, ai)
+              : null;
+          const scored = scoreLead({
+            business: body.business,
+            primaryType: body.placesSignals?.primaryType ?? null,
+            industryQueried: body.industry ?? null,
+            phone: body.phone ?? null,
+            businessStatus: body.placesSignals?.businessStatus ?? null,
+            rating: body.placesSignals?.rating ?? verification.business.rating ?? null,
+            reviewCount:
+              body.placesSignals?.reviewCount ?? verification.business.reviewCount ?? null,
+            websiteStatus: result.enrichment.websiteStatus,
+            hasWebsite,
+            site,
+          });
+
+          return Response.json({
+            ok: true,
+            result: {
+              ...result,
+              verification,
+              // The spec score REPLACES the old composite as the lead score.
+              leadScore: scored.leadScore,
+              leadTier: scored.leadTier,
+              scoreBreakdown: scored.scoreBreakdown,
+              // keep the composite around for reference/debugging
+              opportunityScore: leadScore,
+              siteAssessment: site,
+            },
+          });
         } catch (e) {
           return Response.json(
             { error: e instanceof Error ? e.message : "Unknown error" },

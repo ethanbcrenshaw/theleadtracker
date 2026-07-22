@@ -40,6 +40,7 @@ export type Place = {
   userRatingCount?: number;
   reviews?: Array<{ publishTime?: string }>;
   utcOffsetMinutes?: number;
+  primaryTypeDisplayName?: { text?: string };
 };
 type PlacesResponse = { places?: Place[]; nextPageToken?: string; error?: { message?: string } };
 
@@ -90,6 +91,7 @@ export function signalsFromPlace(p: Place): PlacesSignals {
     reviewCount: p.userRatingCount,
     lastReviewAt: reviewTimes.length ? reviewTimes[reviewTimes.length - 1] : undefined,
     utcOffsetMinutes: p.utcOffsetMinutes,
+    primaryType: p.primaryTypeDisplayName?.text,
   };
 }
 

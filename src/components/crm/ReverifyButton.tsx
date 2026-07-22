@@ -1,7 +1,14 @@
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useLeads } from "@/lib/store";
-import type { Lead, LeadEnrichment, LeadVerification, VerificationTier } from "@/lib/types";
+import type {
+  Lead,
+  LeadEnrichment,
+  LeadTier,
+  LeadVerification,
+  ScoreBreakdown,
+  VerificationTier,
+} from "@/lib/types";
 
 const CONCURRENCY = 3;
 
@@ -73,6 +80,8 @@ export function ReverifyButton() {
             verificationReasons?: string[];
             verification?: LeadVerification;
             leadScore?: number;
+            leadTier?: LeadTier;
+            scoreBreakdown?: ScoreBreakdown;
             websiteOpportunity?: string;
             onlinePresence?: string;
           };
@@ -87,6 +96,8 @@ export function ReverifyButton() {
             verificationReasons: u.verificationReasons,
             verification: u.verification,
             leadScore: u.leadScore,
+            leadTier: u.leadTier,
+            scoreBreakdown: u.scoreBreakdown,
             // Reclassification (e.g. a now-found website) — quality re-derives.
             ...(u.websiteOpportunity
               ? { websiteOpportunity: u.websiteOpportunity as Lead["websiteOpportunity"] }

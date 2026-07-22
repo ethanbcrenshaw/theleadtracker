@@ -464,6 +464,8 @@ export interface EnrichResult {
   websiteOpportunity?: string;
   /** A live website recovered from search that Google didn't list (host only). */
   discoveredWebsite?: string;
+  /** Raw HTML of the fetched site (tags stripped by caller) — for site scoring. */
+  siteBody?: string;
 }
 
 async function generatePitchAngle(
@@ -680,6 +682,7 @@ export async function enrichLeadFull(
   let websiteStatus: LeadEnrichment["websiteStatus"] = "unknown";
   let lastVerifiedAt: string | undefined;
   let verifiedWebsiteHost: string | undefined;
+  let siteBody: string | undefined; // fetched HTML, for the scoring site-read
   const websiteToVerify = input.website || discoveredWebsite;
   const wasDiscovered = !input.website && !!discoveredWebsite;
 
@@ -697,6 +700,7 @@ export async function enrichLeadFull(
       // A blocked/challenge response has no usable body — don't run staleness
       // heuristics on nothing (that would falsely read as "outdated").
       const body = check.body || "";
+      if (body) siteBody = body;
       const outdated = body.length > 400 ? isBodyOutdated(body) : false;
       websiteStatus = outdated ? "outdated" : "good";
       const host = check.finalHost || websiteToVerify;
@@ -871,6 +875,14 @@ export async function enrichLeadFull(
     verificationReasons,
     websiteOpportunity,
     discoveredWebsite: wasDiscovered ? verifiedWebsiteHost : undefined,
+    // Strip tags/scripts so the scoring read gets text, not markup.
+    siteBody: siteBody
+      ? siteBody
+          .replace(/<(script|style)[\s\S]*?<\/\1>/gi, " ")
+          .replace(/<[^>]+>/g, " ")
+          .replace(/\s+/g, " ")
+          .slice(0, 8000)
+      : undefined,
   };
 }
 

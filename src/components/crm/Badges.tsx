@@ -1,4 +1,4 @@
-import type { Quality, LeadStatus } from "@/lib/types";
+import type { Quality, LeadStatus, LeadTier } from "@/lib/types";
 
 /**
  * Small rectangular ink-tag with a colored dot. Editorial print-catalog styling.
@@ -15,13 +15,8 @@ function DotTag({ label, dot }: { label: string; dot: string }) {
     );
   }
   return (
-    <span
-      className="mono inline-flex items-center gap-1.5 whitespace-nowrap px-1.5 py-1 border border-border text-foreground"
-    >
-      <span
-        className="inline-block h-1.5 w-1.5 rounded-full"
-        style={{ background: dot }}
-      />
+    <span className="mono inline-flex items-center gap-1.5 whitespace-nowrap px-1.5 py-1 border border-border text-foreground">
+      <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: dot }} />
       {label}
     </span>
   );
@@ -35,13 +30,20 @@ function qualityDot(q: Quality): string {
 
 function statusDot(s: LeadStatus): string {
   switch (s) {
-    case "Not Called":     return "color-mix(in oklab, var(--foreground) 25%, transparent)";
-    case "Called":         return "var(--frog-ink)";
-    case "Voicemail":      return "color-mix(in oklab, var(--foreground) 40%, transparent)";
-    case "Callback Scheduled": return "var(--sienna)";
-    case "Zoom Booked":    return "var(--frog-ink)";
-    case "Sold":           return "var(--frog-ink)";
-    case "Not Interested": return "color-mix(in oklab, var(--foreground) 30%, transparent)";
+    case "Not Called":
+      return "color-mix(in oklab, var(--foreground) 25%, transparent)";
+    case "Called":
+      return "var(--frog-ink)";
+    case "Voicemail":
+      return "color-mix(in oklab, var(--foreground) 40%, transparent)";
+    case "Callback Scheduled":
+      return "var(--sienna)";
+    case "Zoom Booked":
+      return "var(--frog-ink)";
+    case "Sold":
+      return "var(--frog-ink)";
+    case "Not Interested":
+      return "color-mix(in oklab, var(--foreground) 30%, transparent)";
   }
 }
 
@@ -57,7 +59,11 @@ export function StatusBadge({ s }: { s: LeadStatus }) {
  * Verification-tier chip. Green for VERIFIED (positive/confirmed),
  * red for UNVERIFIED (warning), ink for PARTIAL (neutral).
  */
-export function TierChip({ tier }: { tier: "verified" | "partial" | "unverified" | null | undefined }) {
+export function TierChip({
+  tier,
+}: {
+  tier: "verified" | "partial" | "unverified" | null | undefined;
+}) {
   if (!tier) return null;
   const cls =
     tier === "verified"
@@ -65,9 +71,30 @@ export function TierChip({ tier }: { tier: "verified" | "partial" | "unverified"
       : tier === "unverified"
         ? "border-[color:var(--sienna)] text-[color:var(--sienna)]"
         : "border-border text-muted-foreground";
+  return <span className={`mono border px-1.5 py-0.5 ${cls}`}>{tier.toUpperCase()}</span>;
+}
+
+/**
+ * Lead-tier badge (Furniture/Upholstery scoring spec). HOT is the strong,
+ * call-first tier (frog-blue fill); WARM/COOL step down; COLD and
+ * DISQUALIFIED read as red/muted so bad-fit leads are visually obvious.
+ */
+export function TierBadge({ tier, score }: { tier: LeadTier | null | undefined; score?: number }) {
+  if (!tier) return null;
+  const cls =
+    tier === "hot"
+      ? "border-[color:var(--frog-ink)] bg-[color:var(--frog-tint)] text-[color:var(--frog-ink)]"
+      : tier === "warm"
+        ? "border-[color:var(--frog-ink)] text-[color:var(--frog-ink)]"
+        : tier === "cool"
+          ? "border-border text-foreground"
+          : tier === "disqualified"
+            ? "border-[color:var(--sienna)] text-[color:var(--sienna)]"
+            : "border-border text-muted-foreground";
   return (
-    <span className={`mono border px-1.5 py-0.5 ${cls}`}>
+    <span className={`mono border px-1.5 py-0.5 font-medium ${cls}`}>
       {tier.toUpperCase()}
+      {typeof score === "number" && tier !== "disqualified" ? ` · ${score}` : ""}
     </span>
   );
 }
@@ -114,7 +141,10 @@ export function TagBadge({
       {label}
       {onRemove && (
         <button
-          onClick={(e) => { e.stopPropagation(); onRemove(); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
           aria-label={`Remove tag ${label}`}
           className="hover:text-[color:var(--sienna)]"
         >

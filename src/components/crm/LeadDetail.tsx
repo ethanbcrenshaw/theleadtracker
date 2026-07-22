@@ -22,7 +22,7 @@ import type {
   WebsiteOpportunity,
 } from "@/lib/types";
 import { useLeads } from "@/lib/store";
-import { StatusBadge, TagBadge, TierChip, EvidenceChip } from "./Badges";
+import { StatusBadge, TagBadge, TierChip, TierBadge, EvidenceChip } from "./Badges";
 import { formatDate, normalizeTag, pitchAngle, sourceLinks } from "@/lib/crm-utils";
 import { AddLeadSheet } from "./AddLeadSheet";
 import { Botanical } from "./Botanical";
@@ -192,6 +192,7 @@ function DetailBody({
   return (
     <div className="p-6 space-y-8">
       <LeadHero lead={lead} onStartCall={onStartCall} onEdit={() => setEditOpen(true)} />
+      <ScoreBreakdownBlock lead={lead} />
       <Dossier lead={lead} updateLead={updateLead} />
       <OutcomeActions lead={lead} setStatus={setStatus} updateLead={updateLead} />
       <NotesBlock lead={lead} note={note} setNote={setNote} addNote={addNote} />
@@ -241,30 +242,6 @@ function DetailBody({
               {s}
             </span>
           ))}
-        </div>
-      </div>
-
-      <div className="border-t border-border pt-4">
-        <div className="mono text-muted-foreground mb-2">— Find Them Online</div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 border-t border-border">
-          {sourceLinks(lead).map((link) => (
-            <a
-              key={link.source + link.url}
-              href={link.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-between gap-2 border-b border-r border-border px-3 py-3 hover:bg-foreground/[0.04] transition-colors"
-            >
-              <div className="min-w-0">
-                <div className="text-sm font-medium text-foreground truncate">{link.label}</div>
-                <div className="mono text-muted-foreground truncate">{link.domain}</div>
-              </div>
-              <span className="mono text-muted-foreground">[ OPEN ]</span>
-            </a>
-          ))}
-        </div>
-        <div className="mono text-muted-foreground mt-2">
-          Links search by business + city — opens the most likely profile.
         </div>
       </div>
 
@@ -377,8 +354,9 @@ function LeadHero({
             <div className="mono text-muted-foreground mt-3">
               {lead.city.toUpperCase()}, {lead.state.toUpperCase()}
             </div>
-            <div className="flex items-center gap-3 mt-3">
+            <div className="flex items-center gap-3 mt-3 flex-wrap">
               <StatusBadge s={lead.status} />
+              {lead.leadTier && <TierBadge tier={lead.leadTier} score={lead.leadScore} />}
               {lead.zoomBooked && (
                 <span className="mono border border-[color:var(--sienna)] text-[color:var(--sienna)] px-1.5 py-1">
                   ZOOM {lead.zoomDate ? formatDate(lead.zoomDate).toUpperCase() : "BOOKED"}
@@ -438,6 +416,10 @@ function LeadHero({
         <span className="font-mono text-lg sm:text-xl tracking-wide">{lead.phone}</span>
       </a>
 
+      {/* Find-them-online — moved directly under the phone for fast lead
+          double-checking (this is what you reach for most). */}
+      <FindOnline lead={lead} />
+
       <div className="flex items-center gap-5">
         {onStartCall && (
           <button onClick={() => onStartCall(lead)} className="mono ink-link">
@@ -452,6 +434,75 @@ function LeadHero({
       </div>
       {/* silence unused initials import */}
       <span className="hidden">{initials(lead.business)}</span>
+    </div>
+  );
+}
+
+function FindOnline({ lead }: { lead: Lead }) {
+  return (
+    <div className="border border-border">
+      <div className="mono text-muted-foreground px-3 pt-2.5 pb-1">— Find Them Online</div>
+      <div className="grid grid-cols-1 sm:grid-cols-2">
+        {sourceLinks(lead).map((link) => (
+          <a
+            key={link.source + link.url}
+            href={link.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-between gap-2 border-t border-r border-border px-3 py-2.5 hover:bg-foreground/[0.04] transition-colors"
+          >
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-foreground truncate">{link.label}</div>
+              <div className="mono text-muted-foreground truncate">{link.domain}</div>
+            </div>
+            <span className="mono text-muted-foreground shrink-0">[ OPEN ]</span>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ScoreBreakdownBlock({ lead }: { lead: Lead }) {
+  const sb = lead.scoreBreakdown;
+  if (!sb) return null;
+  const rows: Array<{ label: string; band: string; points: number }> = [
+    { label: "NICHE FIT", ...sb.niche_fit },
+    { label: "WEB PRESENCE", ...sb.web_presence },
+    { label: "REPUTATION", ...sb.reputation },
+    { label: "MISSED INQUIRY", ...sb.missed_inquiry },
+    { label: "REACHABILITY", ...sb.reachability },
+  ];
+  const dq = sb.tier === "disqualified";
+  return (
+    <div className="border-t border-border pt-4">
+      <div className="flex items-baseline justify-between gap-3 mb-2">
+        <div className="mono text-muted-foreground">— Fit Score</div>
+        <TierBadge tier={sb.tier} score={sb.total} />
+      </div>
+      {dq ? (
+        <p className="mono text-[color:var(--sienna)] border border-[color:var(--sienna)] px-3 py-2">
+          {sb.rationale}
+        </p>
+      ) : (
+        <>
+          <div className="border border-border">
+            {rows.map((r) => (
+              <div
+                key={r.label}
+                className="grid grid-cols-[1fr_auto] gap-3 px-3 py-2 border-b border-border last:border-b-0"
+              >
+                <div className="mono text-muted-foreground">
+                  {r.label}{" "}
+                  <span className="text-foreground/70">· {r.band.replace(/_/g, " ")}</span>
+                </div>
+                <div className="mono text-foreground">+{r.points}</div>
+              </div>
+            ))}
+          </div>
+          <p className="text-sm text-foreground/85 leading-relaxed mt-2">{sb.rationale}</p>
+        </>
+      )}
     </div>
   );
 }

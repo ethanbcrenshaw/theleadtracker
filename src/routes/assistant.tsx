@@ -8,7 +8,9 @@ import type {
   Lead,
   LeadEnrichment,
   LeadSource,
+  LeadTier,
   LeadVerification,
+  ScoreBreakdown,
   VerificationTier,
   WebsiteOpportunity,
 } from "@/lib/types";
@@ -136,6 +138,8 @@ type EnrichResult = {
   verificationReasons?: string[];
   verification?: LeadVerification;
   leadScore?: number;
+  leadTier?: LeadTier;
+  scoreBreakdown?: ScoreBreakdown;
   websiteOpportunity?: string;
   discoveredWebsite?: string;
 };
@@ -634,16 +638,20 @@ function AssistantPage() {
               placesSignals: cand.placesSignals,
               offGoogle: cand.offGoogle,
               foundVia: cand.foundVia,
+              industry: job.industry,
             }),
           });
           const j = await r.json();
           if (!r.ok || !j.ok) throw new Error(j.error || `enrich ${r.status}`);
           const res: EnrichResult = j.result;
           const vouched = placesVouchedClient(res);
+          // A lead the scoring spec disqualifies (closed, no phone, or already
+          // fully served) never gets imported, whatever its verification tier.
           const accept =
-            res.verificationTier === "verified" ||
-            vouched ||
-            (job.includePartial && res.verificationTier === "partial");
+            res.leadTier !== "disqualified" &&
+            (res.verificationTier === "verified" ||
+              vouched ||
+              (job.includePartial && res.verificationTier === "partial"));
           if (accept && imported < job.targetCount && !cancelledJobs.current.has(job.id)) {
             if (res.verificationTier === "verified") verifiedN++;
             else if (vouched) vouchedN++;
@@ -690,6 +698,8 @@ function AssistantPage() {
               verificationReasons: res.verificationReasons,
               verification: res.verification,
               leadScore: res.leadScore,
+              leadTier: res.leadTier,
+              scoreBreakdown: res.scoreBreakdown,
               foundVia: cand.foundVia,
             };
             seenNames.add(nameKey);

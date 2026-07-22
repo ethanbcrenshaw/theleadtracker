@@ -39,6 +39,7 @@ export interface PlacesSignals {
   reviewCount?: number;
   lastReviewAt?: string; // ISO — most recent review publishTime when available
   utcOffsetMinutes?: number; // exact business UTC offset from Places (incl. DST at fetch)
+  primaryType?: string; // Places primary type display name (for niche scoring)
 }
 
 function hostOf(u: string): string | null {

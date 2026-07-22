@@ -5,7 +5,9 @@ import type {
   Lead,
   LeadEnrichment,
   LeadStatus,
+  LeadTier,
   LeadVerification,
+  ScoreBreakdown,
   VerificationTier,
 } from "./types";
 import { seedLeads } from "@/data/seed";
@@ -69,6 +71,8 @@ type LeadRow = {
   verificationTier: VerificationTier | null;
   verificationReasons: string[] | null;
   leadScore: number | null;
+  leadTier: LeadTier | null;
+  scoreBreakdown: ScoreBreakdown | null;
   verification: LeadVerification | null;
   foundVia: string[] | null;
   created_at?: string;
@@ -110,6 +114,8 @@ function rowToLead(r: LeadRow): Lead {
   if (r.verificationTier != null) l.verificationTier = r.verificationTier;
   if (r.verificationReasons != null) l.verificationReasons = r.verificationReasons;
   if (r.leadScore != null) l.leadScore = r.leadScore;
+  if (r.leadTier != null) l.leadTier = r.leadTier;
+  if (r.scoreBreakdown != null) l.scoreBreakdown = r.scoreBreakdown;
   if (r.verification != null) l.verification = r.verification;
   if (r.foundVia != null) l.foundVia = r.foundVia;
   return sanitizeLead(l);
@@ -150,6 +156,8 @@ function leadToRow(l: Lead): LeadRow {
     verificationTier: l.verificationTier ?? null,
     verificationReasons: l.verificationReasons ?? null,
     leadScore: l.leadScore ?? null,
+    leadTier: l.leadTier ?? null,
+    scoreBreakdown: l.scoreBreakdown ?? null,
     verification: l.verification ?? null,
     foundVia: l.foundVia ?? null,
   };
@@ -179,13 +187,15 @@ function isMissingColumnError(error: unknown): boolean {
   );
 }
 
-const OPTIONAL_COLUMNS = ["foundVia"] as const;
+const OPTIONAL_COLUMNS = ["foundVia", "leadTier", "scoreBreakdown"] as const;
 
-function stripOptionalColumns(rows: LeadRow[]): Omit<LeadRow, "foundVia">[] {
+function stripOptionalColumns(
+  rows: LeadRow[],
+): Array<Omit<LeadRow, (typeof OPTIONAL_COLUMNS)[number]>> {
   return rows.map((r) => {
     const copy: Record<string, unknown> = { ...r };
     for (const c of OPTIONAL_COLUMNS) delete copy[c];
-    return copy as Omit<LeadRow, "foundVia">;
+    return copy as Omit<LeadRow, (typeof OPTIONAL_COLUMNS)[number]>;
   });
 }
 
@@ -221,6 +231,13 @@ async function dbUpdateOne(id: string, patch: Partial<Lead>) {
     rowPatch[k] = v === undefined ? null : v;
   }
   const { error } = await db().update(rowPatch).eq("id", id);
+  if (error && isMissingColumnError(error)) {
+    logErr("update (retrying without optional columns — run the scoring migration)", error);
+    for (const c of OPTIONAL_COLUMNS) delete rowPatch[c];
+    const { error: retryErr } = await db().update(rowPatch).eq("id", id);
+    logErr("update-retry", retryErr);
+    return;
+  }
   logErr("update", error);
 }
 

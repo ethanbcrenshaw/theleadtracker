@@ -4,8 +4,9 @@ import { enrichLeadFull } from "@/lib/enrichment.server";
 import { hostOf } from "@/lib/enrichment.server";
 import { runVerificationChecks } from "@/lib/verification.server";
 import { getAI } from "@/lib/ai.server";
+import { assessSiteQuality, scoreLead } from "@/lib/scoring.server";
 import { createClient } from "@supabase/supabase-js";
-import type { LeadVerification } from "@/lib/types";
+import type { LeadTier, LeadVerification, ScoreBreakdown } from "@/lib/types";
 
 type LeadRow = {
   id: string;
@@ -16,6 +17,9 @@ type LeadRow = {
   websiteOpportunity: string;
   onlinePresence: string;
   verification: LeadVerification | null;
+  leadScore: number | null;
+  leadTier: LeadTier | null;
+  scoreBreakdown: ScoreBreakdown | null;
 };
 
 /**
@@ -51,7 +55,9 @@ export const Route = createFileRoute("/api/enrich-lead")({
 
         const { data: row, error: readErr } = await supabase
           .from("leads")
-          .select('id,business,city,state,phone,"websiteOpportunity","onlinePresence",verification')
+          .select(
+            'id,business,city,state,phone,"websiteOpportunity","onlinePresence",verification,"leadScore","leadTier","scoreBreakdown"',
+          )
           .eq("id", leadId)
           .maybeSingle();
         if (readErr) return Response.json({ error: readErr.message }, { status: 500 });
@@ -95,6 +101,35 @@ export const Route = createFileRoute("/api/enrich-lead")({
               : undefined,
           });
 
+          // ── Re-score against the Furniture/Upholstery spec ────────────────
+          const hasWebsite =
+            result.enrichment.websiteStatus === "good" ||
+            result.enrichment.websiteStatus === "outdated";
+          const site =
+            hasWebsite && result.siteBody && ai
+              ? await assessSiteQuality(result.siteBody, lead.business, ai)
+              : null;
+          const scored = scoreLead({
+            business: lead.business,
+            primaryType: null,
+            industryQueried: null,
+            phone: lead.phone,
+            businessStatus: priorBusiness?.businessStatus ?? null,
+            rating: priorBusiness?.rating ?? null,
+            reviewCount: priorBusiness?.reviewCount ?? null,
+            websiteStatus: result.enrichment.websiteStatus,
+            hasWebsite,
+            site,
+          });
+          // Keep prior score in a history record so drift is visible.
+          if (typeof lead.leadScore === "number" && lead.leadTier) {
+            const priorHistory = lead.scoreBreakdown?.history ?? [];
+            scored.scoreBreakdown.history = [
+              ...priorHistory,
+              { score: lead.leadScore, tier: lead.leadTier, at: new Date().toISOString() },
+            ].slice(-10);
+          }
+
           const patch: Record<string, unknown> = {
             enrichment: result.enrichment,
             confidenceScore: result.confidenceScore,
@@ -104,8 +139,12 @@ export const Route = createFileRoute("/api/enrich-lead")({
             verificationTier: result.verificationTier,
             verificationReasons: result.verificationReasons,
             verification,
-            leadScore,
+            leadScore: scored.leadScore,
+            leadTier: scored.leadTier,
+            scoreBreakdown: scored.scoreBreakdown,
           };
+          // keep the composite opportunity score referenced but not primary
+          void leadScore;
           // Correct the opportunity label when verification found a real site
           // (or confirmed there's none). quality re-derives from it client-side.
           if (result.websiteOpportunity && result.websiteOpportunity !== lead.websiteOpportunity) {
