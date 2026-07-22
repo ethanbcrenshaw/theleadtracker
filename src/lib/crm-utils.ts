@@ -1,4 +1,17 @@
-import type { Lead, LeadSource, LeadStatus, Quality, WebsiteOpportunity } from "./types";
+import type { Lead, LeadSource, LeadStatus, LeadTier, Quality, WebsiteOpportunity } from "./types";
+
+/**
+ * Client-side tier from score (Furniture/Upholstery spec thresholds). Used as
+ * a fallback when the leadTier column isn't present/populated yet, so tier
+ * badges still render from the persisted leadScore.
+ */
+export function tierFromScore(score?: number | null): LeadTier | undefined {
+  if (typeof score !== "number") return undefined;
+  if (score >= 75) return "hot";
+  if (score >= 55) return "warm";
+  if (score >= 35) return "cool";
+  return "cold";
+}
 
 export const STATUSES: LeadStatus[] = [
   "Not Called",

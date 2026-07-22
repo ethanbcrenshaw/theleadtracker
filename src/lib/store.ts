@@ -11,7 +11,7 @@ import type {
   VerificationTier,
 } from "./types";
 import { seedLeads } from "@/data/seed";
-import { qualityFromOpportunity } from "./crm-utils";
+import { qualityFromOpportunity, tierFromScore } from "./crm-utils";
 import { supabase } from "@/integrations/supabase/client";
 
 const LOCAL_KEY = "lead-mgmt-v1";
@@ -114,7 +114,10 @@ function rowToLead(r: LeadRow): Lead {
   if (r.verificationTier != null) l.verificationTier = r.verificationTier;
   if (r.verificationReasons != null) l.verificationReasons = r.verificationReasons;
   if (r.leadScore != null) l.leadScore = r.leadScore;
+  // Prefer the stored tier; fall back to deriving it from the score so badges
+  // work even before the leadTier column exists.
   if (r.leadTier != null) l.leadTier = r.leadTier;
+  else if (r.leadScore != null) l.leadTier = tierFromScore(r.leadScore);
   if (r.scoreBreakdown != null) l.scoreBreakdown = r.scoreBreakdown;
   if (r.verification != null) l.verification = r.verification;
   if (r.foundVia != null) l.foundVia = r.foundVia;
