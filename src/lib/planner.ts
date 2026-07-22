@@ -105,14 +105,19 @@ export function plannablePool(leads: Lead[]): Lead[] {
     (l.leadScore ?? 0) >= 70 &&
     l.verification?.business?.businessStatus === "OPERATIONAL" &&
     (l.verification?.business?.reviewCount ?? 0) >= 1;
-  return leads.filter(
-    (l) =>
-      l.quality === "High" &&
-      l.status === "Not Called" &&
-      !isValidContactDate(l.lastContacted) &&
-      !l.unverified &&
-      ((l.verificationTier ?? "partial") === "verified" || placesVouched(l)),
-  );
+  return leads.filter((l) => {
+    if (l.status !== "Not Called" || isValidContactDate(l.lastContacted) || l.unverified)
+      return false;
+    if (l.leadTier === "disqualified") return false;
+    // The Furniture/Upholstery score is authoritative: any warm-or-better
+    // lead is plannable — including weak-site (has-website) prospects, which
+    // are Low/Medium `quality` but a legitimate warm target.
+    if ((l.leadScore ?? 0) >= 55) return true;
+    // Legacy path for leads scored before the spec existed.
+    return (
+      l.quality === "High" && ((l.verificationTier ?? "partial") === "verified" || placesVouched(l))
+    );
+  });
 }
 
 export function computeWeekPlan(leads: Lead[], schedule: CallSchedule): WeekPlan {
